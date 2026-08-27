@@ -1,0 +1,1439 @@
+VMS AUTHORITATIVE FINAL DESIGN DOCUMENT
+V17 CHANGE AUTHORITY — Preserve every previously approved Vendor, candidate, Resume, PAN, filtering, security, API and database rule unless explicitly changed by this V17 reconciliation and correction update.
+Mandatory Recruiter authentication flow: SIGN UP → PENDING → ADMIN APPROVAL/REJECTION → ACTIVE ACCOUNT → LOGIN. No unapproved first-time Recruiter login.
+Application roles remain Recruiter and Vendor User. Recruiter access levels are STANDARD and ADMIN. Maximum TWO ACTIVE ADMIN Recruiters globally.
+V17 — TWO-ADMIN AGENT-READY FINAL IMPLEMENTATION SPECIFICATION
+Company-Scoped Vendor Visibility • V1 • No LLM/AI API dependency
+DOCUMENT STATUS — AUTHORITATIVEThis document is the cleaned, reconciled and reordered V16 implementation specification. It incorporates the finalized business requirements and the corrections identified in the supplied V14 document. It is intended to be handed directly to a coding/implementation agent. It must be treated as the single source of truth for V1 behavior. Items explicitly marked OPEN DESIGN DECISION must not be invented by engineering.
+
+1. Purpose and Final Correction Summary
+The supplied V14 document was substantively correct on the core product rules, but its structure still contained a few documentation-quality problems: duplicated final verification sections, out-of-order section numbering, a duplicated Open Design Decision entry, and wording in the actor table that could be read as individual-user submission isolation even though the authoritative company-scoped rule was already correct elsewhere. This final document removes those contradictions and puts the implementation flow in one deterministic order.
+Exactly two V1 application login roles: Recruiter and Vendor User.
+There is no separate Admin login, separate Admin application or separate Admin role. ADMIN is an authorization level of the Recruiter application role. V1 starts with one ADMIN Recruiter and supports a maximum of TWO ACTIVE ADMIN Recruiters.
+Recruiter is the single internal application role. Recruiters must complete signup and receive approval before login. STANDARD Recruiters perform normal recruitment operations; ADMIN Recruiters additionally manage Recruiter signup approvals and Admin privilege management.
+Vendor is the consultancy/company entity; Vendor User is an individual account belonging to exactly one Vendor.
+V1 permits MULTIPLE ACTIVE Vendor Users per Vendor. Historical/disabled records remain possible.
+Vendor-side submission visibility is COMPANY/VENDOR scoped, not individual-user scoped.
+Same-company Vendor Users can see permitted submissions belonging to their shared Vendor/company; cross-Vendor access is denied.
+PAN is the global candidate identity key. An existing PAN blocks creation of a new candidate/submission and never updates, merges, overwrites, or replaces the existing record.
+All manager-approved candidate fields plus Resume are mandatory.
+Resume Auto Entry is deterministic PDF processing only. No LLM, AI API, agent, model inference, or token service is used.
+Recruiter may view/download Resume and reveal PAN when authorized, but may not edit PAN or replace/edit/delete Resume through ordinary Candidate Edit.
+Recruiter filtering/search is server-side and follows the authoritative filtering matrix.
+Candidate status exists in backend/API/database; dedicated status UI is not required in V1.
+Password recovery/reset remains OPEN DESIGN DECISION.
+2. Product Scope
+The VMS enables authorized Vendor Users from consultancy/company organizations to submit candidates against active internal roles. Recruiter is the single internal V1 application role responsible for recruitment operations. ADMIN Recruiters additionally manage Recruiter access and Admin privileges.
+2.1 Included in V1
+Vendor User public signup and signup request creation.
+Recruiter Approval Requests screen with approve/reject workflow.
+Vendor User activation, disablement and reactivation.
+Vendor User login, profile management and multi-device sessions.
+Recruiter role/department operations to the extent explicitly defined.
+Candidate submission against active roles.
+Manual candidate entry.
+Deterministic PDF Resume Auto Entry.
+Advance PAN checking and final transactional PAN validation.
+Recruiter candidate review/editing, PAN reveal and Resume view/download.
+Recruiter candidate search/filter/pagination/sort.
+Filtered XLSX export.
+Backend candidate status state machine and immutable status history.
+Audit logging, security controls, observability and production hardening.
+2.2 Explicitly Out of Scope
+Separate Admin login, separate Admin application or separate Admin role. ADMIN is a Recruiter authorization level.
+Separate Hiring Manager role.
+Separate recruiter-company hierarchy.
+Candidate self-service portal.
+Payroll, invoicing, billing or contract management.
+Automated interview scheduling.
+AI/LLM candidate decisions or Resume understanding.
+AI APIs/model inference.
+PAN correction workflow.
+Premature microservices.
+Resume replacement/deletion/version-management in V1.
+Password recovery/reset unless separately approved.
+3. Actors and Authorization Model
+Actor
+Definition
+V1 capabilities
+Must not access
+Recruiter
+Single internal V1 application role (Recruiter), with STANDARD or ADMIN authorization level.
+Signup approval/rejection; Vendor User lifecycle; role management; candidate operations; PAN reveal; Resume view/download; status backend operations; search/filter/export; audit.
+No separate Admin login/application. ADMIN is an authorization level within Recruiter. Maximum two ACTIVE Admin Recruiters.
+Vendor
+Consultancy/company organization.
+Own company identity; associated Vendor Users; company-scoped candidate/submission boundary.
+Other Vendors' data.
+Vendor User
+Individual external account belonging to exactly one Vendor.
+Public signup; login; profile; active role selection; candidate submission; PDF Resume upload/review; view all permitted submissions belonging to the same Vendor/company.
+Other Vendors' submissions/data; Recruiter-only APIs.
+3.1 Recruiter Signup, Approval and Login — Mandatory Flow
+RECRUITER SIGNUP FIELDS — V1: Full Name, Email Address, Mobile Number, Password and Confirm Password. Company/Vendor fields are not part of Recruiter signup. Email is the canonical Recruiter login identity.
+Recruiter signup is a public request-creation action only. It does not authenticate the requester and does not create an ACTIVE login account.
+The password is hashed with Argon2id (or an approved equivalent) before it is persisted in recruiter_signup_requests. The approving Admin never receives the password or hash.
+On APPROVE, the hashed password is transferred into the canonical internal_users account in the same transaction; the pending request is marked APPROVED and linked to created_user_id. On REJECT, no ACTIVE login account is created.
+Recruiter login is allowed only when internal_users.status=ACTIVE and role=RECRUITER. The server resolves access_level=STANDARD or ADMIN from authoritative database state.
+A rejected Recruiter may submit a new signup request. Each resubmission receives a new request ID; prior REJECTED requests remain historical and audited.
+A Recruiter must sign up before login. The signup screen collects the approved Recruiter identity fields and password/confirmation.
+Backend validates the request and creates recruiter_signup_requests with status=PENDING. Password material is never stored in plaintext.
+No canonical ACTIVE internal_users login identity exists until an ADMIN approves the request.
+The request appears in Approval Requests. Only ADMIN Recruiters can approve or reject Recruiter signup requests.
+APPROVE creates/activates the canonical Recruiter account as STANDARD by default. REJECT leaves a historical REJECTED request and the requester cannot authenticate.
+After approval, the Recruiter logs in using the same signup email and password. Login creates a revocable server-side session and JWT access token.
+A rejected Recruiter may submit a new signup request; the old rejected request remains historical and audited.
+Frontend visibility is not authorization. Every protected Recruiter endpoint resolves current access_level server-side.
+3.2 Two-Admin Authorization Model
+The initial initialized Recruiter is ADMIN #1.
+Additional approved Recruiters are STANDARD by default.
+An existing ADMIN may promote any ACTIVE STANDARD Recruiter to ADMIN when the current active Admin count is below two.
+There may be no more than TWO ACTIVE ADMIN Recruiters in the entire application.
+Once ADMIN #2 exists, ADMIN #1 and ADMIN #2 have equal Admin authority.
+Either Admin may remove the other Admin's Admin privilege. Removal changes ADMIN → STANDARD; it does not delete or disable the Recruiter account.
+A Standard Recruiter cannot approve/reject Recruiter signup requests, grant Admin access or remove Admin access.
+Admin grant/removal must be transaction-safe, concurrency-safe and audited.
+3.3 Admin Profile UI
+3.4 Recruiter Authorization Matrix
+3.5 Approval Requests UI — Authoritative In-Application Workflow
+The Approval Requests screen is one in-application screen with request-type separation/filtering. It must support Vendor Signup Requests and Recruiter Signup Requests without relying on email approval.
+STANDARD Recruiter: may view and approve/reject Vendor signup requests only. Recruiter signup requests are visible as non-actionable or omitted; they must never be actionable by a Standard Recruiter.
+ADMIN Recruiter: may view and approve/reject both Vendor signup requests and Recruiter signup requests.
+Each request row must show only the information required for the decision. Never show passwords, password hashes, JWTs, session tokens or other credential material.
+Approval/rejection buttons must be disabled when the request is no longer PENDING. Backend state checks remain authoritative even if multiple browser tabs act on the same request.
+Recruiter signup and Vendor signup requests must be visually distinguishable by request type and status, and both workflows must expose PENDING, APPROVED and REJECTED state/history as applicable.
+APPROVAL API OWNERSHIP — Vendor signup approvals use the generic /api/v1/recruiter/approval-requests endpoints. Recruiter signup approvals use the dedicated /api/v1/recruiter/recruiter-signup-requests endpoints and are ADMIN-only. The UI may combine both request types on one Approval Requests screen, but the backend endpoint contracts remain separate and authorization is enforced server-side.
+Only ADMIN Recruiter profile pages show the current Admin roster and Admin-management controls.
+Each Admin profile may show the current one or two Admins. When two exist, the other Admin can be removed from Admin access.
+Standard Recruiter profiles must not expose the Admin roster, Grant Admin or Remove Admin controls.
+Backend authorization must deny direct API access to Admin-management endpoints for Standard Recruiters.
+4. Account Model and Core Invariants
+Invariant
+Authoritative rule
+V1 Vendor User model
+Multiple ACTIVE Vendor Users per Vendor are supported in V1.
+Historical accounts
+DISABLED/historical Vendor User records may remain.
+Future capability
+V1 supports multiple Vendor User records, including multiple ACTIVE records, under the same Vendor.
+Identity
+vendor_user_id identifies the individual account.
+Company boundary
+vendor_id identifies the consultancy/company and is the Vendor-side visibility boundary.
+Login email
+Vendor User login email is unique according to the account policy.
+Password
+Strongly hashed; never plaintext; never returned.
+Recruiter
+V1 starts with one initialized ACTIVE ADMIN Recruiter. The database must support multiple Recruiter identities. Each Recruiter has access_level STANDARD or ADMIN, and at most two ACTIVE Recruiters may have ADMIN access.
+5. Authentication and Session Flow
+SESSION MODEL — The user's device remains signed in through a server-side revocable session until the user logs out, the session is revoked, the account is disabled, or the security policy expires the session. Multiple devices create independent sessions.
+JWT access tokens should be short-lived and paired with a secure refresh/session mechanism. Do not create an effectively permanent JWT. Logout revokes the session/refresh state so a future refresh cannot issue another access token.
+Removing ADMIN access must invalidate Admin authorization on subsequent API checks even if the Recruiter's existing access token has not naturally expired. Authorization is always resolved from current server-side access_level.
+
+Figure 1 — Vendor signup/approval flow.
+Recruiter Signup, Approval and Login Flow
+Recruiter enters credentials        ↓Backend validates credentials        ↓Account eligibility checked        ↓Server session created        ↓JWT access token issued        ↓Recruiter dashboard
+Vendor Login Flow
+Vendor enters email/password        ↓Backend validates credentials        ↓Account must be ACTIVE        ↓Server session created        ↓JWT access token issued        ↓Vendor application
+Authentication answers WHO the user is; authorization answers WHAT the user may access.
+Invalid login response is exactly: 'Invalid email or password. Please check your credentials and try again.'
+Responses must not reveal whether an email exists or whether an account is PENDING, REJECTED or DISABLED.
+JWT access tokens are combined with server-side revocable session/refresh state.
+Logout revokes the current session.
+Vendor User disablement revokes all active sessions for that Vendor User.
+Multiple devices are supported through independent session identities.
+Purely stateless JWT authorization is not sufficient because disablement/revocation must take effect immediately.
+6. Vendor Signup, Approval and Rejection
+VENDOR COMPANY IDENTITY / UNIQUENESS — Company Name entered at signup identifies the Vendor/company. Vendor/company names must be normalized for uniqueness comparison (trim whitespace, normalize case and apply the chosen canonical normalization rule) and protected by a database uniqueness constraint/index on the normalized value.
+If the normalized company already exists, a new Vendor User signup may proceed through PENDING approval, subject to duplicate-pending-request and login-identity uniqueness protection. Multiple ACTIVE Vendor Users may belong to the same Vendor.
+If the normalized company exists, the pending signup is associated with that existing Vendor. If the company does not yet exist, the pending signup request carries the normalized company identity; the Vendor record and Vendor User are created/linked transactionally on approval.
+A rejected request does not create an ACTIVE Vendor account.
+A second PENDING request for the same Vendor/login identity must not create uncontrolled duplicate accounts. The backend must enforce this with a transaction-safe uniqueness/idempotency rule.
+Candidate Vendor Name is never typed manually by the Vendor User. It is derived from the authenticated vendor_id and displayed as the Vendor/company name.
+The in-application Approval Requests screen is the authoritative approval mechanism for Vendor signup and Recruiter signup. Email notification is optional/informational and never the source of truth. Recruiter signup approval is ADMIN-only.
+Step
+System behavior
+1
+Vendor User opens /vendor/signup.
+2
+Enters Company Name, User Name, Email, Mobile Number, Password and confirmation where required.
+3
+Backend validates input, password strength and login-identity uniqueness; multiple ACTIVE Vendor Users per Vendor are permitted.
+4
+Password is strongly hashed before persistence.
+5
+vendor_signup_requests record is created in PENDING state.
+6
+Recruiter sees Vendor requests in Approval Requests. Recruiter signup requests are actionable only by ADMIN Recruiters.
+7
+ADMIN Recruiter APPROVES or REJECTS Recruiter signup requests; authorized Recruiter APPROVES or REJECTS Vendor signup requests. Operations are transactional and concurrency-safe.
+8
+APPROVE creates/activates the Vendor User account and makes it ACTIVE.
+9
+REJECTED request remains immutable historical/audit data and cannot authenticate.
+10
+Rejected Vendor User may resubmit; resubmission creates a NEW request identity in PENDING.
+IMPORTANTNo password is sent to the approving Recruiter. Approval never exposes a password or password hash.
+
+6.1 Notification Policy — No Email Approval Dependency
+V1 does NOT require an email to be sent to the Recruiter for approval. The Approval Requests UI is the authoritative and mandatory approval mechanism for both Vendor and Recruiter signup.
+No SMTP provider, email API key or email-based approval link is required for V1.
+If a future informational email notification is added, it must never become an approval source, must never contain passwords/hashes/tokens, and must not block the approval workflow.
+Future informational notifications, if separately approved, may be sent only after successful PENDING-request persistence.
+Future notification failure must not roll back a successful signup request.
+Approval Requests remains the authoritative workflow and is the only V1 approval mechanism.
+Any future notification payload must never contain plaintext password, password hash or credential material.
+7. Vendor User Account Lifecycle
+Vendor Signup State Machine
+PENDING        ↓APPROVED → ACTIVE        ↓REJECTED → cannot authenticate
+Active Account Lifecycle
+ACTIVE        ↓DISABLED        ↓ACTIVE
+Only Recruiter controls Vendor User disablement/reactivation.
+DISABLED accounts cannot authenticate or access protected Vendor APIs.
+Disablement revokes active sessions.
+All signup, approval, rejection, activation, disablement and reactivation actions are audited.
+8. Vendor Profile
+Vendor User can view their own profile.
+Vendor User may edit permitted personal fields: User Name and Mobile Number.
+Email is the login identity and is not silently editable.
+Vendor/company association is not editable through ordinary profile APIs.
+Vendor/company name is derived from vendor_id and is not a free-form candidate-submission field.
+Password and password hash are never returned.
+9. Role and Department Management
+PostgreSQL is the source of truth.
+Vendor can select only ACTIVE departments and ACTIVE roles.
+Role lifecycle: DRAFT → ACTIVE → CLOSED → ARCHIVED, with CLOSED → ACTIVE allowed for an authorized Recruiter when the role exists, is currently CLOSED, normal validation passes, the role belongs to a valid active department according to the approved role/department model, and no separate explicit business restriction exists.
+Historical submissions remain preserved.
+Stale Vendor pages must be rejected by backend when a role is no longer ACTIVE.
+CLOSED ROLE REACTIVATION — Any CLOSED role may be reactivated by an authorized Recruiter when the role exists, is currently CLOSED, normal validation passes, the role belongs to a valid active department according to the approved role/department model, and no separate explicit business restriction exists. Do not invent additional eligibility conditions. The backend must lock/check current state transactionally and audit the transition.
+Department write APIs beyond the explicitly approved active-department read behavior remain OPEN DESIGN DECISION; engineers must not invent them.
+
+10. Candidate Data Contract
+Field
+Required
+Implementation rule
+Vendor Name
+Mandatory
+Auto-derived from authenticated Vendor/company; not editable in candidate form.
+CV Sent Date
+Mandatory
+Defaults to today's date; Vendor may select another date using calendar UI; backend validates.
+Employment Mode
+Mandatory
+Dropdown: Perm / C2H.
+Role
+Mandatory
+Dropdown containing ACTIVE roles only.
+Candidate Name
+Mandatory
+Text.
+Contact Number
+Mandatory
+Indian phone-number validation.
+Email ID
+Mandatory
+Email-format validation; no email duplicate rejection introduced.
+Current Company
+Mandatory
+Text.
+Total Exp
+Mandatory
+Numeric decimal years.
+Relevant Exp
+Mandatory
+Numeric decimal years.
+Notice Period
+Mandatory
+Dropdown: Immediate / 15 / 30 / 45 / 60 / 90 days.
+CTC
+Mandatory
+Numeric; LPA.
+ECTC
+Mandatory
+Numeric; LPA.
+Current Location
+Mandatory
+Text.
+Preferred Location
+Mandatory
+Text.
+PAN Card
+Mandatory
+Indian PAN validation; encrypted actual value + deterministic keyed fingerprint; global uniqueness.
+LinkedIn URL
+Mandatory
+Valid LinkedIn URL.
+Education
+Mandatory
+Free text for V1.
+About the Candidate
+Mandatory
+Free text.
+Resume/CV
+Mandatory
+PDF only; uploaded from files.
+NO EXTRA V1 CANDIDATE FIELDSThe manager-approved list above is authoritative. Submission Date is a system-generated timestamp, not a Vendor form field.
+
+11. Vendor Candidate Submission — Complete Flow
+
+Figure 3 — End-to-end candidate submission and final transaction.
+Authenticate as ACTIVE Vendor User.
+Select ACTIVE department and role.
+Choose Manual Entry or Resume Auto Entry.
+Provide PAN early for advisory duplicate feedback.
+Complete/review every mandatory candidate field.
+If using Resume Auto Entry, review every extracted/missing field.
+Correct missing/invalid values manually.
+Backend validates the complete payload.
+Final transaction rechecks PAN, role availability, Vendor authorization, every mandatory field and Resume submission eligibility.
+If PAN already exists, reject the attempt and create no new candidate/submission.
+If all rules pass, create candidate and submission and write audit event atomically.
+Return confirmation reference and initial SUBMITTED status.
+12. Resume Auto Entry — Deterministic Only
+
+PDF only.
+Private object storage.
+File type, size and detected-content validation.
+Malware/content scanning before Recruiter access.
+Sandboxed deterministic parser.
+Regex, section detection, dictionaries and normalization.
+Persist extraction results and parser version.
+Show every configured candidate field.
+Highlight extracted, missing and invalid values.
+Vendor can manually correct all fields.
+Final business rules are always authoritative; extraction is assistive only.
+No LLM, AI API, generative AI, agent, model inference server or token-processing service.
+RESUME SUBMISSION ELIGIBILITY — A Resume becomes submission-eligible automatically after successful upload, PDF/file-type validation, file-size validation, detected-content validation, malware/content scanning and required deterministic processing completion. No human Resume approval is required. Resume extraction remains assistive; missing extracted fields may be completed manually where permitted.
+13. PAN Identity, Security and Duplicate Rule
+
+Normalize PAN before every lookup and final submission.
+Use a deterministic keyed PAN fingerprint for duplicate detection/uniqueness.
+Encrypt actual PAN for authorized reveal.
+Vendor UI masks PAN after save/display.
+Recruiter UI masks PAN by default and provides an authorized eye/reveal control.
+Full PAN is never logged.
+PAN conflict must not reveal another Vendor's identity.
+Advance PAN check is advisory only.
+Final PAN check is repeated inside the authoritative submission transaction.
+Database uniqueness and transaction/locking protect concurrent submissions.
+EXISTING PAN = HARD REJECTIONIf normalized PAN already exists: create no new candidate, create no new submission, do not update, merge, overwrite or replace any existing candidate field.
+
+PAN Decision Flow
+Normalize PAN        ↓Lookup keyed fingerprint        ↓Exists?        ↓YES → reject new attempt        ↓NO → continue final validation
+14. Recruiter UI and Candidate Operations
+RECRUITER EDITABILITY — Recruiter may edit all manager-approved candidate fields except Vendor Name, PAN and Resume. This includes CV Sent Date, Employment Mode, Role, Candidate Name, Contact Number, Email ID, Current Company, Total Exp, Relevant Exp, Notice Period, CTC, ECTC, Current Location, Preferred Location, LinkedIn URL, Education and About the Candidate, subject to the same validation rules used at submission.
+Changing a candidate field must not bypass PAN uniqueness, role ACTIVE checks, authorization, audit requirements or required-field validation.
+Recruiter edits do not change the immutable submitting Vendor/company attribution. Vendor Name remains derived from submission.vendor_id.
+
+Recruiter can see all submissions from all Vendors.
+Recruiter can access Approval Requests; Recruiter signup approval/rejection is ADMIN-only.
+Recruiter can manage Vendor User access lifecycle; ADMIN Recruiters additionally manage Recruiter access and Admin privilege.
+Recruiter can view candidate detail.
+Recruiter can edit approved candidate fields only.
+Vendor Name, PAN and Resume are not editable through ordinary Candidate Edit.
+Recruiter can reveal PAN through authorized audited eye control.
+Recruiter can view/download Resume through authorized backend access.
+Resume replacement/deletion/version management is not a V1 feature.
+All Recruiter edits, PAN reveals and Resume downloads are audited.
+15. Recruiter Search, Dropdown Filters and One-Column Search
+The Recruiter UI must support multiple dropdown filters simultaneously plus exactly one active search column at a time. Search and filters are executed server-side against PostgreSQL; the frontend must never load the entire candidate dataset and filter it locally.
+Column
+Filter/Search
+Sort
+Candidate Name
+One-column search
+Sortable
+Column
+Filter / Search
+Sort
+Security / Scope
+Candidate Name
+One-column search
+Sortable
+
+Contact Number
+One-column search
+
+
+Email ID
+One-column search
+
+
+Current Company
+Dropdown filter; one-column search
+Sortable
+
+Role
+Dropdown filter; one-column search
+Sortable
+
+Vendor Name
+Dropdown filter; one-column search
+Sortable
+
+Current Location
+Dropdown filter; one-column search
+Sortable
+
+Preferred Location
+Dropdown filter; one-column search
+Sortable
+
+Employment Mode
+Dropdown filter
+
+
+Total Experience
+Numeric/range filter
+
+
+Relevant Experience
+Numeric/range filter
+
+
+Notice Period
+Dropdown filter
+
+
+CTC
+Numeric/range filter
+
+
+ECTC
+Numeric/range filter
+
+
+Education
+Dropdown filter
+
+
+CV Sent Date
+Date/range filter
+Sortable
+
+Submission Date
+Date/range filter
+Sortable
+System-generated timestamp; not a Vendor form field.
+LinkedIn URL
+One-column search
+
+
+PAN
+NOT searchable; NOT a general filter
+Not sortable
+Masked by default; authorized reveal only
+About the Candidate
+No search/filter control; Recruiter editability is defined separately in Candidate Edit.
+Not sortable
+Not in authoritative search list in V1; display-only refers to filtering/search behavior, not editability.
+Multiple dropdown filters use AND semantics.
+One-column search can be combined with multiple dropdown filters.
+Search may be performed against Candidate Name, Contact Number, Email ID, Current Company, Role, Vendor Name, Current Location, Preferred Location and LinkedIn URL as defined by the matrix.
+Numeric/range filters apply to Total Experience, Relevant Experience, CTC and ECTC.
+Dropdown/date filters apply to Employment Mode, Notice Period, Education, CV Sent Date and other matrix-defined fields.
+Filtered export must reuse the same authorized backend query scope. V1 XLSX export is synchronous: the backend applies the current filters/search, generates the XLSX in the request, and returns the file as the download response. The core V1 workflow does not use asynchronous export_jobs.
+Server-side pagination, filtering and sorting are mandatory.
+PostgreSQL indexes must support approved patterns.
+Filtered export must reuse the same authorized backend query scope.
+16. Candidate Status State Machine
+Current
+Allowed next
+Actor
+Reason
+SUBMITTED
+SCREENING, REJECTED
+Recruiter
+Reason required when rejecting.
+SCREENING
+INTERVIEW, REJECTED
+Recruiter
+Reason required when rejecting.
+INTERVIEW
+SELECTED, REJECTED
+Recruiter
+Reason required when rejecting.
+SELECTED
+ONBOARDED, REJECTED
+Recruiter
+Reason required when rejecting.
+ONBOARDED
+None
+Recruiter
+Terminal in V1.
+REJECTED
+None
+Recruiter
+Reopening is not implemented unless separately approved.
+STATUS UI SCOPEThe backend/API/database status state machine is authoritative. No dedicated Recruiter status-management UI and no Vendor status UI/timeline/status-management UI are required in V1.
+
+17. Backend Architecture
+Modular monolith for V1.
+Separate asynchronous Resume-processing worker.
+FastAPI + Python.
+Pydantic validation.
+SQLAlchemy 2.x or equivalent.
+PostgreSQL.
+Private object storage.
+Managed queue/background worker.
+Redis only when measured operational needs justify it.
+OpenAPI documentation.
+Server-side RBAC and record-level authorization.
+Request Processing Architecture
+Client UI        ↓API Gateway/WAF if applicable        ↓Authentication        ↓Authorization        ↓Business Validation        ↓PostgreSQL / Object Storage        ↓Audit + Observability
+18. Backend Module Boundaries
+auth/sessions
+Recruiter access management + recruitment operations
+vendors/vendor users
+departments
+job roles
+candidates
+PAN/business rules
+submissions
+resumes
+recruiter operations
+exports
+audit
+health/observability
+19. Vendor Authorization / IDOR Protection
+
+NON-NEGOTIABLE VISIBILITY RULEVendor-side visibility is COMPANY/VENDOR scoped. Vendor User A can see submissions created by Vendor User B when both belong to the same Vendor. Vendor User A cannot see submissions belonging to a different Vendor. The backend derives vendor_id from the authenticated Vendor User; client-supplied vendor_id/vendor_user_id must never determine authorization.
+
+authenticated vendor_user_id        ↓resolve authoritative vendor_id        ↓SELECT/authorize submissionsWHERE submission.vendor_id = authenticated_vendor_id        ↓same Vendor → ALLOWdifferent Vendor → DENY
+vendor_user_id remains stored on submissions for submitting-user attribution, audit and source identity.
+Do not implement Vendor visibility as WHERE submission.vendor_user_id = authenticated_vendor_user_id.
+Frontend hiding is not a security control.
+Direct URL/API identifier manipulation must be denied server-side.
+Same-company Resume access follows the same permitted Vendor/company authorization boundary.
+Recruiter has global operational visibility.
+20. API Contract — Authoritative V1 Catalog
+
+The following catalog is the single authoritative V1 endpoint inventory. All Recruiter signup, Recruiter approval, Admin-management, Vendor signup/approval, candidate, Resume, PAN, session and export endpoints must be represented here with the same authorization, validation, response, audit and idempotency detail. Do not implement an endpoint that is not represented in this catalog or explicitly approved later.
+Method
+Exact Path
+Purpose
+Authentication / Role
+Request / Validation
+Success / Important Errors
+Authorization / Audit / Idempotency
+POST
+/api/v1/auth/recruiter/login
+Recruiter login
+Public
+Email/password; canonical Recruiter account must be ACTIVE and approved
+200 JWT access token + session/refresh state; generic 401
+Recruiter role; STANDARD or ADMIN access level resolved server-side; generic non-enumerating failure; session/login audit
+POST
+/api/v1/auth/vendor/signup
+Create Vendor signup request
+Public
+Company, User Name, Email, Mobile, Password, Confirm Password where required; validation; strong password hash
+201/202 PENDING request
+No plaintext password; signup audited; duplicate identity protected
+POST
+/api/v1/auth/vendor/login
+Vendor User login
+Public
+Email/password; only ACTIVE Vendor User
+200 session; generic 401
+PENDING/REJECTED/DISABLED denied without enumeration; login audit
+POST
+/api/v1/auth/logout
+Logout/revoke current session
+Authenticated Recruiter or Vendor User
+Current session
+200 session revoked
+Server-side session revocation; audit
+GET
+/api/v1/recruiter/approval-requests
+List Vendor signup approval requests
+Recruiter
+Server-side status filters/pagination
+200 page
+Only PENDING/relevant request data; no credentials; access audited
+GET
+/api/v1/recruiter/approval-requests/{id}
+Approval request detail
+Recruiter
+Request ID; never password/hash
+200 detail; 401 unauthenticated; 403 when authenticated but unauthorized to the approval-management operation; 404 for invalid/nonexistent request IDs
+401/403/404; access audited
+POST
+/api/v1/recruiter/approval-requests/{id}/approve
+Approve pending Vendor signup
+Recruiter
+Only PENDING; transactional account/Vendor association
+200 APPROVED + ACTIVE account
+Row lock/state check; audit; idempotent conflict prevention
+POST
+/api/v1/recruiter/approval-requests/{id}/reject
+Reject pending Vendor signup
+Recruiter
+Only PENDING; reason if required
+200 REJECTED request
+Row lock/state check; audit; rejected request cannot authenticate
+GET
+/api/v1/recruiter/vendor-users
+List Vendor Users
+Recruiter
+Server-side filters/pagination
+200 page
+Access audited as applicable
+POST
+/api/v1/recruiter/vendor-users/{id}/disable
+Disable Vendor User
+Recruiter
+ACTIVE account
+200 DISABLED
+Revoke active sessions; audit
+POST
+/api/v1/recruiter/vendor-users/{id}/reactivate
+Reactivate Vendor User
+Recruiter
+DISABLED account
+200 ACTIVE
+Audit
+GET
+/api/v1/vendor/profile
+Read own profile
+Vendor User
+Authenticated own identity
+200 profile
+Never return password/hash
+PATCH
+/api/v1/vendor/profile
+Update permitted profile fields
+Vendor User
+User Name/Mobile only
+200 updated
+Email/Vendor association rejected; audited
+GET
+/api/v1/departments
+List active departments
+Authorized user
+Active only
+200 list
+401/403
+GET
+/api/v1/job-roles?department_id={department_id}
+List active Vendor-selectable roles
+Vendor User
+Active roles only
+200 list
+401/403/422
+POST
+/api/v1/recruiter/job-roles
+Create role
+Recruiter
+Under active department
+201 role
+Audited
+PATCH
+/api/v1/recruiter/job-roles/{id}
+Update role
+Recruiter
+Approved fields/lifecycle
+200 role
+Audited
+GET
+/api/v1/recruiter/job-roles
+Role inventory
+Recruiter
+Server-side listing
+200 list
+Audited as applicable
+POST
+/api/v1/recruiter/job-roles/{id}/deactivate
+Deactivate role
+Recruiter
+ACTIVE → CLOSED
+200 CLOSED
+Historical submissions preserved; audited
+POST
+/api/v1/recruiter/job-roles/{id}/reactivate
+Reactivate role
+Recruiter
+CLOSED → ACTIVE; role must exist, be currently CLOSED, pass normal validation and belong to a valid active department; no separate explicit business restriction is required
+200 ACTIVE
+Transactional state check; historical submissions preserved; audit required
+POST
+/api/v1/pan/check
+Advance PAN check
+Vendor User or authorized Recruiter
+Normalize PAN; keyed fingerprint; advisory only
+Structured advisory result
+No competing Vendor identity disclosed
+POST
+/api/v1/resumes
+Upload private PDF Resume
+Vendor User / authorized workflow
+PDF-only; size/content validation; malware/content scanning; private storage; required processing gates before submission eligibility
+202 resume_id + authoritative processing/eligibility state
+Audited
+GET
+/api/v1/resumes/{resume_id}/status
+Resume processing status
+Authorized actor
+Record-scoped
+200 authoritative state
+401 unauthenticated; 404 for cross-Vendor sensitive/unknown Resume resources; 403 only where resource existence is not sensitive and the actor is authenticated but unauthorized
+GET
+/api/v1/resumes/{resume_id}/download
+Original PDF download/access
+Authorized Vendor User or Recruiter
+Record-scoped authorization
+200 PDF
+401 unauthenticated; 404 for cross-Vendor sensitive/unknown Resume resources; 403 only where resource existence is not sensitive and the actor is authenticated but unauthorized
+POST
+/api/v1/submissions
+Create candidate submission
+Vendor User
+Active role; mandatory fields; accessible resume_id; PAN; Idempotency-Key
+201 submission
+Final transaction/audit
+GET
+/api/v1/vendor/submissions
+All submissions belonging to the authenticated Vendor/company
+Vendor User
+vendor_user_id derived from authenticated session; authoritative vendor_id resolved server-side; server-side pagination
+200 scoped page
+Vendor/company-scoped visibility by authenticated vendor_id; client-supplied vendor_id/vendor_user_id ownership IDs ignored; audit access as required.
+GET
+/api/v1/recruiter/candidates
+Global candidate listing/search/filter
+Recruiter
+Authoritative matrix; server-side filters/search/pagination/sort
+200 page
+Global operational visibility; query/export audited
+GET
+/api/v1/recruiter/submissions/{id}
+Candidate/submission detail
+Recruiter
+Record-scoped; PAN masked
+200 detail
+Access audited
+PATCH
+/api/v1/recruiter/submissions/{id}
+Edit permitted candidate fields
+Recruiter
+Approved fields only; Vendor Name/PAN/Resume rejected
+200 updated
+Every edit audited
+PATCH
+/api/v1/recruiter/submissions/{id}/status
+Backend status transition
+Recruiter
+Valid target; rejection reason when required
+200 new status/history
+Transition audited
+GET
+/api/v1/recruiter/submissions/{id}/history
+Status/history
+Recruiter
+Immutable history
+200 history
+Access audited
+POST
+/api/v1/recruiter/export
+Filtered candidate export
+Recruiter
+Same filters/search and authorization as listing
+Generated XLSX returned as the download response
+Same authorization/filter/search scope as listing; export audited; synchronous V1 workflow
+ADDITIONAL AUTHORITATIVE RECRUITER ACCESS ENDPOINTS
+POST /api/v1/recruiter/admins/{user_id}/remove — ADMIN only. Changes another ACTIVE ADMIN Recruiter to STANDARD; account remains active; transaction/locking/audit required.
+POST /api/v1/recruiter/admins/{user_id}/grant — ADMIN only. Promotes an ACTIVE STANDARD Recruiter to ADMIN only when Admin count < 2; transaction/locking/audit required.
+GET /api/v1/recruiter/admins — ADMIN only. Returns current Admin roster, maximum two records, limited to authorized profile metadata.
+POST /api/v1/recruiter/recruiter-signup-requests/{id}/reject — ADMIN only. Transactionally marks the request REJECTED; row/state lock and audit required.
+POST /api/v1/recruiter/recruiter-signup-requests/{id}/approve — ADMIN only. Transactionally creates/activates the canonical Recruiter as STANDARD; row/state lock, idempotency and audit required.
+GET /api/v1/recruiter/recruiter-signup-requests/{id} — ADMIN only. Returns non-credential request detail.
+GET /api/v1/recruiter/recruiter-signup-requests — ADMIN only. Lists Recruiter signup requests with server-side status/pagination filters; never returns credentials.
+POST /api/v1/auth/recruiter/signup — PUBLIC. Creates recruiter_signup_requests=PENDING after validation; never stores plaintext password.
+POST /api/v1/auth/recruiter/signup — PUBLIC — Request: full_name, email, mobile_number, password, confirm_password. Validate required fields, normalized email uniqueness, password strength and confirmation. Store only password_hash in recruiter_signup_requests. Return 201/202 with request_id and PENDING state; never issue a login token.
+GET /api/v1/recruiter/recruiter-signup-requests — ADMIN ONLY — Query: status, page, page_size, optional search. Return non-credential request data and status/history metadata. Never return password_hash.
+GET /api/v1/recruiter/recruiter-signup-requests/{id} — ADMIN ONLY — Return the selected non-credential request and review metadata. Reject unauthorized access server-side.
+POST /api/v1/recruiter/recruiter-signup-requests/{id}/approve — ADMIN ONLY — Only PENDING is valid. Transactionally create/activate internal_users as RECRUITER + STANDARD, transfer password_hash, mark request APPROVED, link reviewer and created_user_id, audit the action, and make the operation idempotent/concurrency-safe.
+POST /api/v1/recruiter/recruiter-signup-requests/{id}/reject — ADMIN ONLY — Only PENDING is valid. Mark request REJECTED with reviewer/time/reason, create no ACTIVE account, audit the action, and make the operation idempotent/concurrency-safe.
+GET /api/v1/recruiter/admins — ADMIN ONLY — Return the current ACTIVE Admin roster (maximum two) with safe profile metadata only. Never expose credentials.
+POST /api/v1/recruiter/admins/{user_id}/grant — ADMIN ONLY — Target must be an ACTIVE STANDARD Recruiter. Transactionally lock/check Admin count; allow only when current ACTIVE Admin count < 2; change access_level to ADMIN; audit. If count is already 2, return a controlled conflict and make no change.
+POST /api/v1/recruiter/admins/{user_id}/remove — ADMIN ONLY — Target must be the other ACTIVE ADMIN Recruiter, not the caller. Transactionally change access_level ADMIN → STANDARD; account remains ACTIVE; audit. Existing sessions must lose Admin authorization on subsequent protected checks.
+20.1 Recruiter Signup and Admin Endpoint Contract — Required Detail
+End of API catalog.
+
+21. Submission Idempotency and Retry Safety
+POST /api/v1/submissions requires Idempotency-Key for each logical submission attempt.
+Idempotency record is bound to authenticated Vendor User and payload/request fingerprint.
+Same key + equivalent request returns the original successful result.
+Same key + materially different payload returns idempotency conflict.
+Same key cannot replay another user's result.
+Idempotency persistence and candidate/submission transaction must be coordinated.
+Timeout/retry and concurrent same-key behavior must be integration/E2E tested.
+22. Database Model and Integrity
+INTERNAL USER EMAIL — internal_users.email must be unique after canonical normalization. Recruiter signup must not create two authoritative Recruiter identities for the same normalized email.
+RECRUITER REQUEST UNIQUENESS — A normalized Recruiter email may have at most one actionable PENDING signup request at a time. Historical REJECTED requests remain allowed.
+VENDOR NAME UNIQUENESS — vendors.normalized_name must be unique. Store the display company name separately if needed, but use normalized_name for equality/uniqueness checks.
+VENDOR USER MULTI-ACTIVE SUPPORT — vendor_users must allow multiple ACTIVE rows for the same vendor_id. Do not enforce any database constraint or partial unique index that limits ACTIVE Vendor Users to one per Vendor.
+ADMIN LIMIT — enforce maximum two ACTIVE ADMIN Recruiters using transaction-safe locking/constraint logic. The database and service layer must both protect the invariant.
+Recruiter authentication and authorization are part of the V1 database source of truth. The schema must support multiple Recruiter identities, pending signup requests, STANDARD/ADMIN access levels and a hard maximum of two ACTIVE Admin Recruiters.
+internal_users: id, email, password_hash, name, mobile, role=RECRUITER, access_level=STANDARD|ADMIN, status=ACTIVE|DISABLED, timestamps and audit metadata.
+recruiter_signup_requests: id, name, email, mobile, password_hash (never plaintext), status=PENDING|APPROVED|REJECTED, requested_at, reviewed_at, reviewed_by, rejection_reason, created_user_id and timestamps.
+The canonical internal_users record is created/activated only after ADMIN approval.
+The first seeded Recruiter is ACTIVE + RECRUITER + ADMIN.
+Enforce at most two ACTIVE Admin Recruiters globally with a PostgreSQL transaction-safe constraint/index/locking strategy.
+Do not model Admin as a separate login table or separate application role.
+Admin grant/removal actions are recorded in audit_events.
+Entity
+Purpose
+Entity
+Purpose
+internal_users
+Canonical Recruiter authentication identity. Recruiter signup is required before login. internal_users supports multiple Recruiter accounts with access_level STANDARD or ADMIN.
+vendors
+Consultancy/company entity.
+vendor_users
+Individual Vendor login accounts; multiple ACTIVE Vendor Users may belong to the same Vendor; historical/disabled records may remain; each has independent vendor_user_id.
+vendor_signup_requests
+Authoritative V1 public signup/approval workflow: signup data, Vendor association, Vendor User identity, PENDING/APPROVED/REJECTED status, timestamps, reviewer and rejection information where applicable.
+sessions
+Server-revocable sessions.
+departments
+Departments.
+job_roles
+Role metadata and lifecycle.
+candidates
+Canonical PAN-identified candidate profile.
+submissions
+Candidate + Vendor + Vendor User + Role + workflow.
+resumes
+Private Resume metadata and parse lifecycle.
+resume_extractions
+Field-level deterministic extraction results.
+status_history
+Immutable candidate status transitions.
+audit_events
+Security/business audit.
+export_jobs
+Future/optional asynchronous export tracking only; not used by the V1 synchronous XLSX export workflow.
+idempotency_records
+Submission retry/idempotency protection.
+vendors → vendor_users supports one Vendor to many historical records.
+V1 permits multiple ACTIVE Vendor Users per Vendor. The database must not enforce a one-active-user-per-Vendor limit.
+Do NOT create unconditional UNIQUE(vendor_id) on vendor_users.
+Do NOT create a PostgreSQL partial unique index that limits ACTIVE Vendor Users to one per vendor_id.
+Each Vendor User belongs to exactly one Vendor.
+vendor_id is the Vendor/company visibility boundary.
+vendor_user_id is individual account/audit/source identity.
+Use clear foreign keys between vendors, vendor_users and vendor_signup_requests.
+Do not cascade-delete historical submissions.
+Use UTC timestamps.
+Use indexes supporting vendor/date, role/status/date, status/date and audit entity/time.
+Use a unique normalized PAN fingerprint.
+Use transaction/locking controls for final submission.
+Use controlled migrations.
+Resume database state — the resumes model must persist authoritative processing/eligibility state sufficient to represent upload, validation, malware/content scanning, deterministic processing, failure and submission eligibility. Persist parser version and extraction results. A Resume is submission-eligible only after all required automated gates succeed.
+23. Core Database Relationship Diagram
+vendors  │ 1  ├──────────────< vendor_users  │                    │  │                    └── vendor_user_id  │  └──────────────< submissions >──────────── job_roles                       │                       ├──────── candidate ─────── PAN identity                       │                       ├──────── resume ─────────── private object                       │                       └──────── status_historyvendor_signup_requests ──> vendors / vendor_userssessions ──> authentication identitiesaudit_events ──> all privileged/business/security actionsidempotency_records ──> submission retry protectionexport_jobs ──> future/optional asynchronous export tracking (not used by V1 synchronous export)
+24. Final Submission Transaction
+Begin transaction.
+Normalize and validate PAN.
+Check normalized PAN existence.
+If PAN exists: reject; create no candidate/submission and do not modify the existing candidate.
+Verify selected role is ACTIVE.
+Verify authenticated Vendor User authorization.
+Validate every mandatory candidate field.
+Verify resume_id references a valid, accessible, submission-eligible PDF Resume whose required validation, security scanning and processing gates have completed successfully.
+Only after all checks pass, create candidate.
+Create submission with vendor_id, vendor_user_id, role_id, status and timestamps.
+Write required audit event.
+Commit transaction.
+Return confirmation.
+TRANSACTIONAL GUARANTEEAdvance PAN checks are advisory. Final business rules are enforced inside the transaction and protected by database constraints/locking.
+
+25. Security Architecture
+NO LLM/AI API KEYS — V1 must not require OpenAI, Anthropic, Gemini, Grok or any other LLM/AI API key. Deterministic Resume parsing is local/service-controlled and does not call an LLM.
+V1 operational secrets are limited to infrastructure/application secrets actually required by the selected stack, such as DATABASE_URL, object-storage credentials, JWT signing/verification secret or key pair, encryption/KMS configuration and any queue credentials. Do not add an AI provider key.
+Because V1 approval is UI-based, an SMTP/email API key is not required.
+Recruiter authorization is server-side. JWT/session identity identifies the Recruiter, but every Admin-protected endpoint resolves current access_level from authoritative server-side state.
+Never trust a client-supplied role or access_level claim for authorization.
+After Admin access is removed, subsequent Admin-protected calls must fail authorization.
+Admin promotion/removal must use transaction/locking controls so concurrent requests cannot create a third Admin.
+Admin roster and management controls are accessible only to ADMIN Recruiters.
+Audit Recruiter signup approval/rejection, Admin grant/removal and failed privilege-escalation attempts.
+TLS in transit and encryption at rest.
+Argon2id or equivalent strong password hashing.
+JWT access tokens plus revocable server-side sessions.
+Server-side RBAC and record-level authorization.
+Company-level Vendor isolation.
+IDOR protection.
+Private Resume storage and short-lived signed URLs where appropriate.
+Extension plus detected-content validation.
+Malware scanning.
+Rate limiting.
+CSRF protection where cookie authentication requires it.
+Strict CORS allowlist.
+Secure headers/CSP where compatible.
+Managed secrets/KMS.
+Dependency/container vulnerability scanning.
+PII log scrubbing.
+RESOURCE-SPECIFIC 403/404 POLICY — Use 404-style concealment for cross-Vendor sensitive resources where revealing existence could disclose another Vendor's data, including another Vendor's submissions and Resumes. Use 403 for authenticated but unauthorized privileged operations where resource existence is not sensitive, including Standard Recruiter attempts to access ADMIN-only management operations. Use 404 for invalid/nonexistent resource IDs. Authentication failures remain generic and non-enumerating. Equivalent resources must use consistent mappings.
+CENTRALIZED ERROR MAPPING — Domain authorization and resource-not-found exceptions must map to HTTP responses through a centralized policy so equivalent resources produce predictable 401/403/404 behavior. Client-controlled identifiers must never bypass authorization.
+Audit logging.
+Backups and point-in-time recovery.
+No LLM/AI API/model inference dependency.
+26. Audit and Privacy
+Audit signup creation, approval/rejection, account activation/disablement/reactivation and access changes.
+Audit role lifecycle changes.
+Audit Vendor submissions.
+Audit Recruiter edits and status changes.
+Audit PAN reveal.
+Audit Resume access/download.
+Audit exports.
+Audit failed authorization/security events.
+Never log plaintext passwords, password hashes, full PAN or Resume contents.
+Retention periods remain subject to approved legal/compliance decisions.
+27. Infrastructure, CI/CD and Observability
+CDN/WAF/load balancer where applicable.
+Managed PostgreSQL-compatible database with backups and point-in-time recovery; exact cloud provider remains OPEN DESIGN DECISION.
+Private S3-compatible/object-storage abstraction; exact cloud provider remains OPEN DESIGN DECISION.
+Stateless horizontally scalable API.
+Managed secrets/KMS abstraction; provider-neutral until a cloud provider is formally selected.
+CLOUD PROVIDER NEUTRALITY — V1 architecture must remain cloud-provider-neutral. Use provider-agnostic interfaces/abstractions for object storage, queue/background jobs, secrets/KMS and database configuration where practical. Do not assume AWS, Azure, GCP or provider-specific services unless separately finalized. Production requirements for managed PostgreSQL, private object storage, secure secret management, queue/background worker, TLS, encryption at rest, backups, point-in-time recovery, observability, IaC and separate environments remain mandatory.
+Private object storage.
+Separate worker capacity.
+Managed secrets/KMS.
+Separate development/staging/production environments.
+Infrastructure as Code.
+Lint/type checks.
+Unit/API/frontend tests.
+Dependency/container scanning.
+Immutable build artifacts.
+Rollback-capable releases; infrastructure implementation must remain cloud-provider-neutral until a specific provider is formally finalized.
+Controlled migrations.
+Staging smoke tests.
+Production approval gate.
+Structured logs with request/correlation IDs.
+Separate audit logs.
+API latency/error metrics.
+Login failure metrics.
+PAN conflict metrics.
+Submission throughput.
+Resume parse success/failure.
+Queue depth.
+Export duration.
+Database health.
+Liveness/readiness.
+Alerts for 5xx, latency, saturation, queue backlog, storage failure and auth anomalies.
+28. Testing Strategy
+28.1 Recruiter/Admin Authentication and Authorization Tests
+Recruiter signup request contains only allowed signup fields; password is stored only as a strong hash; approval UI never exposes the hash.
+Standard Recruiter sees only Vendor approval actions; Admin Recruiter sees both Vendor and Recruiter approval actions.
+Recruiter signup request cannot be approved by a Standard Recruiter even by direct API call or manipulated request ID.
+No third ACTIVE Admin can be created under concurrent promotion requests.
+Removing Admin access causes the target's next Admin-protected API request to fail authorization even if an older JWT is still unexpired.
+Recruiter signup → PENDING → ADMIN approval → ACTIVE STANDARD Recruiter → login succeeds.
+Recruiter signup → REJECTED → login fails generically and does not enumerate account state.
+Unapproved Recruiter cannot call protected Recruiter APIs.
+STANDARD Recruiter cannot approve/reject Recruiter signup requests.
+ADMIN Recruiter can approve/reject Recruiter signup requests.
+First initialized Recruiter is ADMIN #1.
+Approved Standard Recruiter can be promoted to ADMIN by an existing Admin when Admin count is 1.
+Third Admin promotion is denied when two ACTIVE Admins already exist.
+Either Admin can remove the other Admin's Admin access; the target remains an ACTIVE Standard Recruiter.
+Concurrent Admin promotions cannot produce more than two Admins.
+Admin roster/management UI and APIs are inaccessible to Standard Recruiters.
+Admin changes are audited.
+Unit: signup validation, password hashing, request states, PAN rules, status transitions, permissions, Recruiter/Vendor authorization.
+Integration: database constraints, signup/approval transactions, concurrency, PAN identity rules, sessions, object storage.
+API: every catalog endpoint, authentication, authorization, approval workflow and contract validation.
+Frontend: forms, calendar/date picker, dropdowns, search, filters, upload/review, masked PAN, error handling.
+End-to-end: signup → approval → login → role selection → submission → Recruiter review.
+Security: IDOR, privilege escalation, account enumeration, upload attacks, session revocation, CSRF/CORS and secret leakage.
+Concurrency: double approval/rejection, duplicate PAN submissions, idempotent retries and simultaneous role changes.
+Performance: filtering, pagination, dashboard queries, PAN checks and submission latency.
+Recovery: queue failure, parser failure, storage failure, database recovery and rollback.
+29. Performance and Scalability Targets
+Metric
+Initial engineering target
+Standard API p95
+< 500 ms excluding asynchronous parsing
+PAN check p95
+< 300 ms under normal load
+Dashboard query p95
+< 700 ms
+Interactive submission
+< 1.5 s after validation when no parser is involved
+Targets are initial engineering goals and must be validated under representative load.
+30. Technology Baseline
+Layer
+Technology baseline
+LLM required?
+Frontend
+Next.js/React + TypeScript
+No
+Backend
+FastAPI + Python
+No
+Database
+PostgreSQL
+No
+ORM
+SQLAlchemy 2.x or equivalent
+No
+Validation
+Pydantic
+No
+PDF parsing
+PyMuPDF/pypdf or equivalent deterministic parser
+No
+Object storage
+Private object storage
+No
+Queue/worker
+Managed queue/background worker
+No
+Optional cache
+Redis only if measured need justifies it
+No
+API docs
+OpenAPI
+No
+31. Implementation Phases
+Implementation correction: Recruiter signup/approval/login and the two-Admin authorization model must be implemented before dependent Admin-only UI/API operations. All previously approved Vendor/candidate flows remain unchanged.
+Foundation: seed initial ADMIN Recruiter; create role=RECRUITER + access_level=STANDARD|ADMIN.
+Access: implement Recruiter signup → PENDING → ADMIN approve/reject → ACTIVE → login.
+Admin management: implement Admin roster, grant/remove, maximum-two constraint, transaction safety and audit.
+UI: implement Approval Requests separation by request type and Admin-only controls on Admin profile pages.
+API/DB/tests: keep endpoint authorization, schema constraints, audit and acceptance tests synchronized.
+Phase
+Deliverables
+Exit criterion
+0 — Foundation
+Repo, environments, DB, migrations, CI/CD, observability, Recruiter auth, Vendor auth foundation, authorization foundations
+Deployable foundation
+1 — Vendor Signup & Access
+Signup, validation, vendor_signup_requests, PENDING, Approval Requests, approve/reject, activation, disablement, reactivation, session revocation
+Signup/approval/account-boundary tests pass
+2 — Roles
+Departments, job roles, lifecycle, Vendor synchronization
+Role/stale-page tests pass
+3 — Candidate Submission
+Mandatory form, PAN advance/final checks, idempotency, final transaction
+Submission/PAN/concurrency tests pass
+4 — Resume
+Private PDF storage, scanning, deterministic worker, Auto-Fill Review
+Resume security/extraction/manual-completion tests pass
+5 — Recruiter Operations
+Candidate detail/edit, PAN reveal, Resume download, search/filter/export, status backend
+Recruiter operation tests pass
+6 — Production Hardening
+Security, concurrency, observability, backups/recovery, performance, deployment hardening
+Production-readiness gate passes
+32. Open Design Decisions — DO NOT INVENT
+Exact Recruiter department-management CRUD fields, lifecycle transitions and dedicated write APIs beyond approved active-department read behavior.
+Password recovery/reset workflow for Vendor Users and Recruiter.
+Future login-email change verification workflow.
+Legal/compliance retention periods.
+Exact implementation details of centralized error-mapping mechanisms, provided they preserve the approved resource-specific 403/404 policy.
+Future status reopening, especially REJECTED.
+Future Vendor status UI exposure.
+Future PAN correction workflow.
+Exact cloud provider and infrastructure sizing if not separately finalized.
+Exact export size/retention limits if not separately finalized.
+Resource-specific 403/404 authorization behavior is finalized in the Security Architecture and must not be changed by engineering.
+33. Final Acceptance Criteria
+NEW ADMIN/RECRUITER ACCEPTANCE CRITERIA
+AC-ADMIN-01 — Recruiter signup is mandatory before Recruiter login.
+AC-ADMIN-02 — Recruiter signup requests remain PENDING until an ADMIN approves or rejects them.
+AC-ADMIN-03 — Approved Recruiters become STANDARD by default.
+AC-ADMIN-04 — Initial Recruiter is ADMIN #1.
+AC-ADMIN-05 — Maximum TWO ACTIVE ADMIN Recruiters globally.
+AC-ADMIN-06 — Either Admin can approve/reject Recruiter signup requests.
+AC-ADMIN-07 — Either Admin can grant/remove Admin access subject to the two-Admin rule.
+AC-ADMIN-08 — Admin removal changes ADMIN → STANDARD and does not delete the account.
+AC-ADMIN-09 — Only Admin profiles show Admin roster and Admin-management controls.
+AC-ADMIN-10 — Database/backend concurrency controls prevent a third Admin.
+AC-ADMIN-11 — Recruiter passwords are never exposed to approving Admins.
+AC-ADMIN-12 — Removed Admin privileges take effect on subsequent protected API authorization checks.
+AC-01 — Recruiter must complete signup, receive approval, and then authenticate through the Recruiter login. An unapproved Recruiter cannot log in.
+AC-02 — No separate Admin login or separate Admin application role exists in V1; ADMIN is an authorization level of Recruiter.
+AC-03 — Active Vendor User can authenticate with email/password.
+AC-04 — PENDING Vendor User cannot access protected Vendor functionality.
+AC-05 — REJECTED Vendor User cannot authenticate as an ACTIVE Vendor User.
+AC-06 — DISABLED Vendor User cannot authenticate and protected API access fails.
+AC-07 — Generic non-enumerating authentication errors are used for invalid/PENDING/REJECTED/DISABLED Vendor login attempts.
+AC-08 — Vendor User can create a public signup request with all mandatory signup fields.
+AC-09 — Signup validates email, mobile, password, confirmation and required fields server-side.
+AC-10 — Vendor User password is strongly hashed and plaintext password is never stored or exposed.
+AC-11 — Every new signup request begins in PENDING state.
+AC-12 — Recruiter can view pending/relevant Vendor signup requests in Approval Requests.
+AC-13 — Approval Requests never expose plaintext passwords, password hashes or sensitive credential material.
+AC-14 — Recruiter can approve a PENDING signup request.
+AC-15 — Recruiter can reject a PENDING signup request.
+AC-16 — Approval is transactional and creates/activates the Vendor User account exactly once.
+AC-17 — Rejection is transactional and a rejected request cannot authenticate as an ACTIVE Vendor User.
+AC-18 — Concurrent approve/reject actions cannot produce conflicting final states.
+AC-19 — Signup, approval, rejection, activation, disablement and reactivation are audited.
+AC-20 — Duplicate active Vendor User email cannot create another authoritative identity.
+AC-21 — Duplicate pending signup for the same login identity cannot create uncontrolled duplicate accounts.
+AC-22 — A Vendor may have historical/disabled Vendor User records and may have multiple ACTIVE Vendor Users in V1.
+AC-23 — Each Vendor User has independent credentials and vendor_user_id.
+AC-24 — Authorized Vendor Users can see submissions belonging to their Vendor/company, including submissions submitted by other authorized users of the same Vendor.
+AC-25 — Same-company Vendor Users can see one another's submissions when those submissions belong to their shared Vendor/company.
+AC-26 — Cross-Vendor access is denied server-side.
+AC-27 — Vendor User cannot access another Vendor/company's Resume through direct or manipulated identifiers; same-company permitted Resume access follows the authenticated Vendor/company authorization scope.
+AC-28 — Recruiter can see submissions from all Vendors and Vendor Users.
+AC-29 — Recruiter can manage Vendor User disablement and reactivation.
+AC-30 — Disabling a Vendor User revokes active sessions.
+AC-31 — All manager-approved candidate fields and mandatory PDF Resume remain enforced.
+AC-32 — Deterministic Resume extraction remains non-LLM/non-generative and extraction failure does not hide required fields.
+AC-33 — Global normalized PAN uniqueness, keyed fingerprint, encrypted actual PAN and no-overwrite behavior remain enforced.
+AC-34 — Recruiter may reveal PAN only through authorized audited access and cannot edit PAN.
+AC-35 — Recruiter may view/download Resume but cannot edit, replace, overwrite, delete or upload a replacement Resume through ordinary candidate editing.
+AC-36 — Active roles are selectable and inactive roles are rejected by the backend.
+AC-37 — Multiple filters, one-column search, combined search+filters and server-side pagination/sorting work according to the authoritative matrix.
+AC-38 — Candidate status transitions remain backend-authoritative, immutable in history, audited and reasoned on rejection.
+Do test synchronous XLSX export uses the same authorized query scope and current search/filter state and does not introduce a V1 asynchronous export subsystem.
+AC-39 — Idempotent submission retries do not create duplicate candidates/submissions.
+AC-40 — Server-side authorization prevents IDOR, privilege escalation, approval-endpoint abuse and arbitrary vendor_user_id/vendor_id manipulation.
+AC-41 — Security, session revocation, rate limiting, CSRF/CORS, malware scanning, PII scrubbing, backups/recovery and observability remain covered.
+AC-42 — UI, API, backend, database, testing and implementation phases consistently describe Recruiter + Vendor User accounts, company-scoped Vendor visibility and the approved signup lifecycle.
+AC-43 — Vendor User A can view Vendor User B's permitted submissions when A and B belong to the same Vendor/company.
+AC-44 — Vendor User A cannot view submissions belonging to a different Vendor/company.
+AC-45 — Backend authorization derives vendor_id from the authenticated Vendor User and never trusts client-supplied vendor_id/vendor_user_id ownership identifiers.
+AC-46 — Vendor Resume authorization follows the same permitted Vendor/company boundary as the associated submission.
+AC-47 — No implementation may use vendor_user_id as the sole Vendor-side submission visibility boundary.
+AC-48 — The final specification contains one authoritative API catalog, one authoritative Recruiter Filtering Matrix and one authoritative status state machine.
+AC-49 — No duplicate section numbering or duplicate final-verification block remains.
+AC-50 — No LLM/AI API/model inference dependency is introduced.
+AC-CORRECTION-01 — A Vendor may have multiple ACTIVE Vendor Users concurrently; each user retains independent credentials and vendor_user_id, while Vendor visibility remains company-scoped by vendor_id.
+AC-CORRECTION-02 — A Resume becomes submission-eligible automatically after successful upload, file/PDF validation, detected-content validation, malware/content scanning and required deterministic processing; no human Resume approval exists.
+AC-CORRECTION-03 — An authorized Recruiter can reactivate any CLOSED role when the role exists, is CLOSED, normal validation passes, the role belongs to a valid active department, and no separate explicit business restriction exists; no additional eligibility rule is invented.
+AC-CORRECTION-04 — Vendor approval uses /api/v1/recruiter/approval-requests endpoints, while Recruiter signup approval uses ADMIN-only /api/v1/recruiter/recruiter-signup-requests endpoints; the UI may combine both request types in one Approval Requests screen.
+AC-CORRECTION-05 — V1 XLSX export is synchronous, applies the same authorization/search/filter scope as the Recruiter candidate listing, and returns the generated XLSX directly in the response.
+AC-CORRECTION-06 — V1 infrastructure remains cloud-provider-neutral; provider-specific services are not assumed before formal cloud selection, while all approved production requirements remain mandatory.
+AC-CORRECTION-07 — Resource-specific 403/404 behavior is centrally mapped: sensitive cross-Vendor resources use 404-style concealment, authenticated unauthorized privileged operations use 403 where existence is not sensitive, invalid/nonexistent resources use 404, and authentication failures remain generic/non-enumerating.
+34. End-to-End System Flows
+34.1 Vendor Signup to First Submission
+Vendor Browser   │   ├── POST /api/v1/auth/vendor/signup   │        │   │        └── PostgreSQL: vendor_signup_requests = PENDING   │   └── Signup confirmationRecruiter Browser   │   ├── GET /api/v1/recruiter/approval-requests   │   └── POST /approve OR /reject            │            ├── transaction + row/state check            ├── account ACTIVE on approve            └── audit eventVendor Browser   │   ├── POST /api/v1/auth/vendor/login   ├── GET active departments/roles   ├── upload Resume OR manual entry   ├── PAN check   └── POST /api/v1/submissions             │             ├── final PAN check             ├── role check             ├── mandatory-field validation             ├── Resume authorization             ├── candidate creation             ├── submission creation             └── audit + COMMIT
+34.2 Recruiter Candidate Review
+Recruiter Login      ↓Recruiter Dashboard      ↓Search Column + Dropdown Filters      ↓GET /api/v1/recruiter/candidates      ↓PostgreSQL server-side query      ↓Candidate Detail      ├── masked PAN → authorized eye reveal      ├── Resume → authorized download      ├── editable candidate fields      └── status transition backend/API              ↓          Audit Event
+34.3 Same-Vendor vs Cross-Vendor Authorization
+Requesting Vendor User       ↓Authenticated session       ↓vendor_user_id       ↓resolve vendor_id       ↓Requested submission.vendor_id       │       ├── equal to authenticated vendor_id → ALLOW       │       └── different vendor_id → DENYIMPORTANT:vendor_user_id = actor identityvendor_id      = Vendor/company visibility boundary
+34.4 Recruiter Signup → Approval → Login
+The UI flow is: Recruiter Signup page → submit request → PENDING confirmation (no login) → Admin Approval Requests → APPROVE/REJECT → if APPROVED, Recruiter Login → dashboard; if REJECTED, no login and a new signup may be submitted later.
+Recruiter Browser   │   ├── POST /api/v1/auth/recruiter/signup   │        ↓   │   recruiter_signup_requests = PENDING   │   ▼ADMIN Recruiter   │   ├── GET recruiter signup requests   ├── APPROVE → internal_users ACTIVE + STANDARD   └── REJECT  → request REJECTED; no login   │   ▼Approved Recruiter   │   └── POST /api/v1/auth/recruiter/login             ↓       revocable session + JWT             ↓       STANDARD or ADMIN authorization
+34.5 Two-Admin Lifecycle
+Authorization rule: Admin count is a global application invariant, not a per-company or per-user setting. Exactly 0–2 ACTIVE Admin Recruiters may exist; V1 starts at 1. A Standard Recruiter can never grant Admin access.
+Initial:ADMIN #1Admin count = 1ADMIN #1 promotes approved Standard Recruiter:ADMIN #1 + ADMIN #2Admin count = 2Admin count = 2:Third Admin promotion → DENIEDADMIN #1 removes ADMIN #2:ADMIN #1 remains ADMINADMIN #2 becomes STANDARD RecruiterORADMIN #2 removes ADMIN #1:ADMIN #2 remains ADMINADMIN #1 becomes STANDARD RecruiterAdmin removal never deletes the Recruiter account.
+35. Agent Implementation Rules
+MANDATORY RECRUITER/ADMIN IMPLEMENTATION RULES
+Do require Recruiter signup and ADMIN approval before Recruiter login.
+Do implement ADMIN as a Recruiter access level, not a separate role/login/dashboard.
+Do support multiple Recruiter accounts in internal_users.
+Do initialize the first Recruiter as ADMIN #1.
+Do make newly approved Recruiters STANDARD by default.
+Do enforce maximum TWO ACTIVE ADMIN Recruiters globally in backend/database.
+Do allow either Admin to approve/reject Recruiter signup requests.
+Do allow either Admin to grant/remove Admin access subject to the two-Admin limit.
+Do show Admin roster and Admin-management controls only on Admin profiles.
+Do keep existing Vendor, candidate, Resume, PAN, search/filter, security and company-scoped visibility requirements unchanged.
+Do synchronize UI, endpoints, backend authorization, database constraints, audit and tests.
+Read this entire document before creating code, schema, API or UI.
+Treat this document as authoritative over inferred product behavior.
+Do not invent OPEN DESIGN DECISIONS.
+Do not introduce a separate Admin application role or Admin login. Implement ADMIN as a Recruiter authorization level.
+Do not implement individual-user-only Vendor submission visibility.
+Do not trust client-supplied ownership IDs.
+Do not store plaintext passwords.
+Do not add LLM/AI API dependencies.
+Do not make PAN editable.
+Do make Resume submission eligibility automatic after all required upload, validation, malware/content scanning and deterministic processing gates succeed; do not introduce human Resume approval.
+Do not make Resume replaceable/deletable/editable in ordinary Candidate Edit.
+Do allow an authorized Recruiter to reactivate a CLOSED role without inventing additional eligibility criteria; require current CLOSED state, normal validation, valid active department association and no separate explicit business restriction.
+Do not create a second candidate when PAN already exists.
+Do not update or overwrite the existing candidate when a duplicate PAN is submitted.
+Do not allow Vendor selection of inactive roles.
+Do not perform authoritative filtering/pagination in frontend memory.
+Do not create unconditional UNIQUE(vendor_id) on vendor_users.
+Do support MULTIPLE ACTIVE Vendor Users per Vendor.
+Do keep historical/disabled Vendor User records.
+Do not create a partial unique index that limits ACTIVE Vendor Users to one per Vendor.
+Do keep vendor_user_id for audit/source attribution even though vendor_id is the visibility boundary.
+Do make critical state transitions transactional and concurrency-safe.
+Do test same-company Vendor access and cross-company denial explicitly.
+Do test direct URL/API manipulation and ownership-ID tampering explicitly.
+Do keep the API catalog, database schema, UI behavior and tests synchronized with the same authorization rules.
+36. Final Consistency Verification
+API catalog completeness
+PASS — Recruiter signup, Recruiter approval/rejection, Admin roster, Admin grant/remove and Recruiter login are all explicitly specified and must be implemented with server-side authorization.
+Approval workflow
+PASS — V1 uses the in-application Approval Requests UI as the authoritative approval mechanism; email is not required.
+Vendor company identity
+PASS — Vendor/company identity is unique by normalized company name; candidate Vendor Name is derived from authenticated vendor_id.
+Recruiter editability
+PASS — Recruiter can edit all manager-approved candidate fields except Vendor Name, PAN and Resume.
+Session security
+PASS — JWT is paired with revocable server-side session/refresh state; Admin privilege changes are enforced server-side.
+Recruiter signup/login
+PASS — Recruiter signup is mandatory; PENDING requests require ADMIN approval/rejection before ACTIVE login.
+Recruiter/Admin authorization
+PASS — Recruiter is the application role; STANDARD and ADMIN are access levels; maximum two ACTIVE Admins.
+Admin management
+PASS — either Admin can approve Recruiter signup requests and manage the other Admin's Admin privilege; Admin roster is shown only on Admin profiles.
+PASS — Recruiter signup, Admin authorization, max-two enforcement, endpoint authorization, Admin UI, database constraints, audit and tests are aligned.
+UI/API/DB consistency
+
+Area
+Final state
+Roles
+PASS — application roles are Recruiter and Vendor User; ADMIN is a Recruiter authorization level, not a separate login role.
+Recruiter authority
+PASS — Recruiter is the single internal application role; ADMIN Recruiters additionally perform Recruiter access and Admin management.
+Vendor model
+PASS — Vendor is company; Vendor User is individual.
+Active-user invariant
+PASS — multiple ACTIVE Vendor Users per Vendor are supported; historical/disabled records are preserved.
+Signup
+PASS — Recruiter signup → PENDING → ADMIN approval/rejection → ACTIVE login; Vendor signup → PENDING → Recruiter approval/rejection.
+Rejected resubmission
+PASS — new request identity; old rejected request remains historical.
+Authentication
+PASS — generic non-enumerating login error; hashed passwords; JWT + revocable server-side sessions.
+Vendor visibility
+PASS — company/Vendor scoped; same-company users can see permitted submissions; cross-Vendor denied.
+IDOR protection
+PASS — backend derives vendor_id; client ownership IDs are not trusted.
+Candidate fields
+PASS — all manager-approved fields + mandatory PDF Resume.
+Resume
+PASS — automated Resume submission eligibility follows successful validation, security scanning and required deterministic processing; no human Resume approval workflow exists.
+PAN
+PASS — encrypted actual PAN + keyed fingerprint + global uniqueness + transactional final check.
+Filtering
+PASS — server-side search/filter/pagination/sort with authoritative matrix.
+Status
+PASS — backend/API/database state machine; no required status UI in V1.
+API
+PASS — one authoritative catalog.
+Database
+PASS — PostgreSQL is the source of truth; multiple ACTIVE Vendor Users per Vendor are permitted and no one-active-user partial unique index is used.
+Security
+PASS — TLS, hashing, sessions, IDOR, private Resume, scanning, rate limits, audit, managed secrets/KMS and provider-neutral infrastructure requirements remain intact.
+Testing
+PASS — unit/integration/API/frontend/E2E/security/concurrency/performance/recovery coverage.
+Documentation structure
+PASS — single sequential numbering; no duplicate final-verification section; no duplicate Open Design Decision entry.
+AI dependency
+PASS — no LLM, AI API, agent or model inference in V1.
+Resume eligibility
+PASS — Resume submission eligibility is automated after successful upload, validation, malware/content scanning and required deterministic processing; no human Resume approval workflow exists.
+Role reactivation
+PASS — any CLOSED role may be reactivated by an authorized Recruiter subject to current-state, normal-validation and valid-active-department checks, with no invented eligibility restrictions.
+Approval API separation
+PASS — Vendor approvals use generic approval-requests endpoints; Recruiter signup approvals use dedicated ADMIN-only recruiter-signup-requests endpoints; the UI remains one request screen.
+XLSX export
+PASS — V1 filtered XLSX export is synchronous and returns the generated file directly; export uses the same authorized query scope as the candidate listing.
+Cloud neutrality
+PASS — PostgreSQL, object storage, queue/worker and secrets/KMS are specified through provider-neutral requirements/abstractions; no cloud provider is selected.
+403/404 policy
+PASS — authorization response behavior is resource-specific and centrally mapped; sensitive cross-Vendor resources use 404-style concealment and appropriate privileged authorization failures use 403.
+FINAL IMPLEMENTATION AUTHORITYThe final non-negotiable Vendor visibility rule is: authenticated Vendor User → resolve authoritative vendor_id → authorize/query by submission.vendor_id. Same Vendor/company = permitted company-scoped access; different Vendor/company = denied. vendor_user_id remains the individual actor/audit/source identity and is not the company visibility boundary.
+
+Resource-specific error policy — PASS — cross-Vendor sensitive resources use 404-style concealment; authenticated unauthorized privileged operations use 403 where existence is not sensitive; invalid/nonexistent IDs use 404; authentication failures remain generic/non-enumerating; centralized mapping keeps equivalent resources consistent.
+END OF V17 TWO-ADMIN AGENT-READY FINAL IMPLEMENTATION SPECIFICATION
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+Capability
+STANDARD Recruiter
+ADMIN Recruiter
+Recruiter signup approval/rejection
+NO
+YES
+Vendor signup approval/rejection
+YES
+YES
+Vendor User lifecycle
+YES
+YES
+Candidate/search/filter/export operations
+YES
+YES
+PAN reveal / Resume download
+YES, authorized/audited
+YES, authorized/audited
+Grant Admin access
+NO
+YES, only if Admin count < 2
+Remove another Admin's Admin access
+NO
+YES
+View Admin roster
+NO
+YES, on Admin profile only
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

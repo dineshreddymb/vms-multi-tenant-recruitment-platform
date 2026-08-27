@@ -1,0 +1,39 @@
+# Environment files
+.env
+.env.*
+!.env.example
+!backend/.env.example
+
+# Specific env files in subdirectories
+backend/.env
+frontend/.env.local
+
+# Python environment and cache
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Node / Next.js / Build directories and caches
+node_modules/
+.next/
+frontend/.next/
+frontend/node_modules/
+frontend/out/
+frontend/.swc/
+frontend/*.tsbuildinfo
+*.tsbuildinfo
+
+# Jest cache
+.jest/
+
+# Temporary, scratch, and storage files
+scratch/
+storage/
+
+# Temporary and debug scripts
+fix_*.py
+scratch_*.py
+verify_*.py
+test_admin_login_capability.py

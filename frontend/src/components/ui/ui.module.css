@@ -1,0 +1,195 @@
+/* UI CSS Modules - Premium Design System Styles */
+
+.button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.25rem;
+  border-radius: var(--radius-md);
+  padding: 0.5rem 1rem;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  user-select: none;
+  text-decoration: none;
+}
+
+.button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.primary {
+  background-color: hsl(var(--primary-hsl));
+  color: hsl(var(--primary-foreground-hsl));
+}
+
+.primary:hover:not(:disabled) {
+  background-color: hsl(var(--primary-hover-hsl));
+}
+
+.secondary {
+  background-color: hsl(var(--secondary-hsl));
+  color: hsl(var(--secondary-foreground-hsl));
+  border-color: hsl(var(--card-border-hsl));
+}
+
+.secondary:hover:not(:disabled) {
+  background-color: hsl(var(--secondary-hover-hsl));
+}
+
+.danger {
+  background-color: hsl(var(--danger-hsl));
+  color: hsl(var(--primary-foreground-hsl));
+}
+
+.danger:hover:not(:disabled) {
+  background-opacity: 0.9;
+}
+
+.outline {
+  background-color: transparent;
+  border: 1px solid hsl(var(--card-border-hsl));
+  color: hsl(var(--foreground-hsl));
+}
+
+.outline:hover:not(:disabled) {
+  background-color: hsl(var(--muted-bg-hsl));
+}
+
+.textBtn {
+  background-color: transparent;
+  color: hsl(var(--primary-hsl));
+  padding: 0.25rem 0.5rem;
+}
+
+.textBtn:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+/* Input Fields */
+.inputGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+  margin-bottom: 1rem;
+  width: 100%;
+}
+
+.label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: hsl(var(--foreground-hsl));
+}
+
+.input {
+  font-family: inherit;
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-md);
+  border: 1px solid hsl(var(--card-border-hsl));
+  background-color: hsl(var(--card-hsl));
+  color: hsl(var(--foreground-hsl));
+  width: 100%;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input:focus {
+  outline: none;
+  border-color: hsl(var(--primary-hsl));
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+}
+
+.inputError {
+  border-color: hsl(var(--danger-hsl));
+}
+
+.errorText {
+  font-size: 0.75rem;
+  color: hsl(var(--danger-hsl));
+  margin-top: 0.125rem;
+}
+
+/* Modal dialog styles */
+.modalOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(15, 23, 42, 0.6);
+  backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  padding: 1rem;
+}
+
+.modalContent {
+  background-color: hsl(var(--card-hsl));
+  border: 1px solid hsl(var(--card-border-hsl));
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  max-width: 500px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+
+.modalHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1.25rem;
+  border-bottom: 1px solid hsl(var(--card-border-hsl));
+}
+
+.modalTitle {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.modalClose {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: hsl(var(--muted-hsl));
+}
+
+.modalClose:hover {
+  color: hsl(var(--foreground-hsl));
+}
+
+.modalBody {
+  padding: 1.25rem;
+  overflow-y: auto;
+}
+
+.modalFooter {
+  padding: 1rem 1.25rem;
+  border-top: 1px solid hsl(var(--card-border-hsl));
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+/* Skeleton Loading styles */
+.skeleton {
+  background-color: hsl(var(--muted-bg-hsl));
+  border-radius: var(--radius-sm);
+  display: inline-block;
+  height: 1.25rem;
+  width: 100%;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 0.3; }
+}

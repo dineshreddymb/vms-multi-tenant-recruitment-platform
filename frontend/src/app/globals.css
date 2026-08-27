@@ -1,0 +1,271 @@
+:root {
+  /* Color Tokens - Deep Slate / Tech Theme (Premium) */
+  --background-hsl: 210, 20%, 98%;
+  --foreground-hsl: 215, 25%, 12%;
+  
+  --card-hsl: 0, 0%, 100%;
+  --card-border-hsl: 214, 16%, 90%;
+  
+  --primary-hsl: 218, 90%, 48%; /* Strong Professional Blue */
+  --primary-hover-hsl: 218, 90%, 40%;
+  --primary-foreground-hsl: 0, 0%, 100%;
+  
+  --secondary-hsl: 215, 15%, 92%;
+  --secondary-hover-hsl: 215, 15%, 86%;
+  --secondary-foreground-hsl: 215, 25%, 15%;
+
+  --accent-hsl: 198, 90%, 43%; /* Cyan Accent */
+  --accent-foreground-hsl: 0, 0%, 100%;
+  
+  --success-hsl: 145, 63%, 42%;
+  --success-bg-hsl: 145, 63%, 95%;
+  --warning-hsl: 35, 92%, 48%;
+  --warning-bg-hsl: 35, 92%, 96%;
+  --danger-hsl: 0, 72%, 51%;
+  --danger-bg-hsl: 0, 72%, 96%;
+  
+  --muted-hsl: 215, 16%, 47%;
+  --muted-bg-hsl: 210, 20%, 94%;
+  
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.08), 0 2px 4px -1px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -2px rgba(0, 0, 0, 0.04);
+
+  --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+[data-theme="dark"] {
+  --background-hsl: 215, 28%, 8%;
+  --foreground-hsl: 210, 20%, 98%;
+  
+  --card-hsl: 215, 28%, 12%;
+  --card-border-hsl: 215, 20%, 18%;
+  
+  --primary-hsl: 217, 91%, 60%;
+  --primary-hover-hsl: 217, 91%, 50%;
+  --primary-foreground-hsl: 215, 28%, 8%;
+  
+  --secondary-hsl: 215, 20%, 18%;
+  --secondary-hover-hsl: 215, 20%, 24%;
+  --secondary-foreground-hsl: 210, 20%, 95%;
+  
+  --muted-hsl: 215, 14%, 60%;
+  --muted-bg-hsl: 215, 20%, 15%;
+  
+  --success-bg-hsl: 145, 60%, 12%;
+  --warning-bg-hsl: 35, 80%, 12%;
+  --danger-bg-hsl: 0, 70%, 12%;
+  
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.4), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.5), 0 4px 6px -2px rgba(0, 0, 0, 0.3);
+}
+
+/* Base Styles & CSS Reset */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-sans);
+}
+
+html, body {
+  height: 100%;
+  width: 100%;
+  background-color: hsl(var(--background-hsl));
+  color: hsl(var(--foreground-hsl));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* Layout Utilities */
+.container {
+  max-width: 1200px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0 1.5rem;
+}
+
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.justify-center { justify-content: center; }
+.flex-1 { flex: 1; }
+.grid { display: grid; }
+
+.gap-1 { gap: 0.25rem; }
+.gap-2 { gap: 0.5rem; }
+.gap-3 { gap: 0.75rem; }
+.gap-4 { gap: 1rem; }
+.gap-6 { gap: 1.5rem; }
+.gap-8 { gap: 2rem; }
+
+.p-2 { padding: 0.5rem; }
+.p-4 { padding: 1rem; }
+.p-6 { padding: 1.5rem; }
+.p-8 { padding: 2rem; }
+
+.mt-2 { margin-top: 0.5rem; }
+.mt-4 { margin-top: 1rem; }
+.mt-6 { margin-top: 1.5rem; }
+.mb-4 { margin-bottom: 1rem; }
+
+.text-center { text-align: center; }
+.text-sm { font-size: 0.875rem; }
+.text-xs { font-size: 0.75rem; }
+.text-lg { font-size: 1.125rem; }
+.text-xl { font-size: 1.25rem; }
+.text-2xl { font-size: 1.5rem; }
+.font-semibold { font-weight: 600; }
+.font-medium { font-weight: 500; }
+
+.w-full { width: 100%; }
+
+/* Scrollbars */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: hsl(var(--background-hsl));
+}
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-hsl), 0.3);
+  border-radius: var(--radius-sm);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-hsl), 0.5);
+}
+
+/* Animations */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Interactive helper classes */
+.focus-ring:focus-visible {
+  outline: 2px solid hsl(var(--primary-hsl));
+  outline-offset: 2px;
+}
+
+/* ============================================================
+   Sidebar Navigation Classes
+   ============================================================ */
+
+.sidebar-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.875rem;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: hsl(var(--foreground-hsl));
+  background-color: transparent;
+  text-decoration: none;
+  transition: background-color 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: pointer;
+  border: none;
+  width: 100%;
+  text-align: left;
+  line-height: 1.4;
+}
+
+.sidebar-nav-link:hover {
+  background-color: hsl(var(--secondary-hsl));
+  color: hsl(var(--foreground-hsl));
+}
+
+.sidebar-nav-link:focus-visible {
+  outline: 2px solid hsl(var(--primary-hsl));
+  outline-offset: 2px;
+}
+
+.sidebar-nav-link.active {
+  background-color: hsl(var(--primary-hsl));
+  color: hsl(var(--primary-foreground-hsl));
+  font-weight: 600;
+}
+
+.sidebar-nav-link.active:hover {
+  background-color: hsl(var(--primary-hover-hsl));
+  color: hsl(var(--primary-foreground-hsl));
+}
+
+.sidebar-logout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: hsl(var(--muted-hsl));
+  background-color: transparent;
+  border: 1px solid hsl(var(--card-border-hsl));
+  cursor: pointer;
+  width: 100%;
+  transition: background-color 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  font-family: inherit;
+}
+
+.sidebar-logout-btn:hover {
+  background-color: hsl(var(--danger-bg-hsl));
+  color: hsl(var(--danger-hsl));
+  border-color: hsl(var(--danger-hsl), 0.3);
+}
+
+.sidebar-logout-btn:focus-visible {
+  outline: 2px solid hsl(var(--danger-hsl));
+  outline-offset: 2px;
+}
+
+.sidebar-avatar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: hsl(var(--primary-hsl));
+  color: hsl(var(--primary-foreground-hsl));
+  font-size: 0.8rem;
+  font-weight: 700;
+  flex-shrink: 0;
+  user-select: none;
+  letter-spacing: 0.03em;
+}
+
