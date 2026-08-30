@@ -46,7 +46,7 @@ def decode_access_token(token: str) -> Optional[dict]:
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Invalid email or password. Please check your credentials and try again.",
+        detail="Session is invalid or has expired. Please log in again.",
         headers={"WWW-Authenticate": "Bearer"},
     )
     
@@ -70,12 +70,13 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
         user = db.query(InternalUser).filter(InternalUser.id == user_id).first()
         
         # Verify recruiter still has access to the company from JWT
-        if company_id:
+        # ADMIN recruiters bypass this check — they have global company access
+        if company_id and company_id != "None" and user and user.access_level != "ADMIN":
             company_access = db.query(RecruiterCompanyAccess).filter(
                 RecruiterCompanyAccess.recruiter_id == user_id,
                 RecruiterCompanyAccess.company_id == company_id
             ).first()
-            if not company_access and user.access_level != "ADMIN":
+            if not company_access:
                 raise credentials_exception
     elif role == "VENDOR_USER":
         user = db.query(VendorUser).filter(VendorUser.id == user_id).first()
@@ -135,7 +136,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
                     db.add(acc)
                     added_any = True
             if added_any:
-                db.commit()
+                db.flush()
         
     # Return user context with company information
     result = {"user": user, "role": role, "session": db_session}
@@ -188,7 +189,7 @@ def require_recruiter_with_company(current: dict = Depends(get_current_user)):
             detail="Recruiter privileges are required to perform this action."
         )
     
-    if not company_id:
+    if not company_id or company_id == "None":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Company context is required. Please log in with company selection."

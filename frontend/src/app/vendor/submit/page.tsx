@@ -946,7 +946,9 @@ export default function SubmitCandidate() {
                 borderRadius: "var(--radius-md)",
                 border: fieldErrors.about ? "1px solid hsl(var(--danger-hsl))" : "1px solid hsl(var(--card-border-hsl))",
                 backgroundColor: "hsl(var(--card-hsl))",
-                color: "hsl(var(--foreground-hsl))"
+                color: "hsl(var(--foreground-hsl))",
+                width: "100%",
+                resize: "vertical"
               }}
               value={about}
               onChange={(e) => setAbout(e.target.value)}

@@ -255,12 +255,14 @@ export default function VendorUsersManagement() {
                               <span style={{
                                 padding: "0.15rem 0.4rem",
                                 borderRadius: "4px",
-                                backgroundColor: "rgba(37, 99, 235, 0.1)",
-                                color: "hsl(var(--primary-hsl))",
-                                fontWeight: 600,
-                                fontSize: "0.8rem"
+                                backgroundColor: m.company_name.toUpperCase() === "IOSYS" ? "rgba(44, 219, 163, 0.15)" : "rgba(30, 99, 233, 0.1)",
+                                color: m.company_name.toUpperCase() === "IOSYS" ? "#1F4E47" : "#1E63E9",
+                                border: `1px solid ${m.company_name.toUpperCase() === "IOSYS" ? "rgba(31, 78, 71, 0.2)" : "rgba(30, 99, 233, 0.15)"}`,
+                                fontWeight: 700,
+                                fontSize: "0.8rem",
+                                textTransform: m.company_name.toUpperCase() === "IOSYS" ? "uppercase" : "none",
                               }}>
-                                {m.company_name}
+                                {m.company_name.toUpperCase() === "IOSYS" ? "IOSYS" : "Volantis"}
                               </span>
                               <span style={getStatusBadgeStyle(m.status)}>{m.status}</span>
                               {isAdmin && (

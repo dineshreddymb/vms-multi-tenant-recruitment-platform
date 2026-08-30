@@ -398,8 +398,8 @@ export default function CandidatesDashboard() {
                 user.activeVendorId
                   ? user.companies
                       .filter(c => c.vendor_id === user.activeVendorId)
-                      .map(c => ({ value: c.vendor_id, label: c.company_name }))
-                  : user.companies.map(c => ({ value: c.vendor_id, label: c.company_name }))
+                      .map(c => ({ value: c.vendor_id, label: c.company_name.toUpperCase() }))
+                  : user.companies.map(c => ({ value: c.vendor_id, label: c.company_name.toUpperCase() }))
               }
               value={vendorId}
               onChange={(e) => {

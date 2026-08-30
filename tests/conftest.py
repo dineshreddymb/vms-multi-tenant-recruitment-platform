@@ -1,8 +1,43 @@
 import os
 os.environ["ENV"] = "testing"
 
+from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.dialects.postgresql import JSONB, UUID as PG_UUID
+
+@compiles(JSONB, "sqlite")
+def compile_jsonb_sqlite(element, compiler, **kw):
+    return "JSON"
+
+# Safely handle PostgreSQL UUID strings on SQLite during testing
+original_bind_processor = PG_UUID.bind_processor
+def safe_bind_processor(self, dialect):
+    if dialect.name == "sqlite":
+        def process(value):
+            if value is None:
+                return None
+            return str(value)
+        return process
+    return original_bind_processor(self, dialect)
+
+PG_UUID.bind_processor = safe_bind_processor
+
+original_result_processor = PG_UUID.result_processor
+def safe_result_processor(self, dialect, coltype):
+    if dialect.name == "sqlite":
+        def process(value):
+            import uuid
+            if value is None:
+                return None
+            if isinstance(value, uuid.UUID):
+                return value
+            return uuid.UUID(value)
+        return process
+    return original_result_processor(self, dialect, coltype)
+
+PG_UUID.result_processor = safe_result_processor
+
 import pytest
-from sqlalchemy import event
+from sqlalchemy import event, text
 from sqlalchemy.orm import Session
 from db.connection import SessionLocal, engine, Base
 from db.seed import seed_database
@@ -16,6 +51,21 @@ def setup_test_db():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
+        # Clean up database tables in order
+        for table in ["audit_events", "status_history", "submissions", "resume_extractions", 
+                      "resumes", "job_roles", "recruiter_company_access", 
+                      "vendor_user_memberships", "vendor_users", "vendors", "internal_users", "candidates"]:
+            db.execute(text(f"TRUNCATE TABLE {table} CASCADE;"))
+        db.commit()
+        
+        # Seed IOSYS and Volantis tenant vendors
+        from db.models import Vendor
+        iosys = Vendor(name="IOSYS", normalized_name="iosys", is_tenant=True)
+        volantis = Vendor(name="Volantis", normalized_name="volantis", is_tenant=True)
+        db.add(iosys)
+        db.add(volantis)
+        db.commit()
+        
         seed_database(db)
     finally:
         db.close()

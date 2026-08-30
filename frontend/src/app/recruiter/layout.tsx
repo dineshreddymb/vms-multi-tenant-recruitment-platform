@@ -8,16 +8,16 @@ import { useAuth } from "@/context/AuthContext";
 // Company-specific branding colors
 const COMPANY_BRANDING = {
   IOSYS: {
-    primaryColor: "hsl(220, 90%, 50%)", // Blue
-    secondaryColor: "hsl(220, 90%, 40%)",
-    lightColor: "rgba(56, 132, 255, 0.1)",
+    primaryColor: "#1F4E47",
+    secondaryColor: "#2CDBA3",
+    lightColor: "rgba(44, 219, 163, 0.15)",
     name: "IOSYS",
   },
   Volantis: {
-    primaryColor: "hsl(160, 90%, 40%)", // Green
-    secondaryColor: "hsl(160, 90%, 30%)",
-    lightColor: "rgba(46, 204, 113, 0.1)",
-    name: "Volantis",
+    primaryColor: "#1E63E9",
+    secondaryColor: "#3882F6",
+    lightColor: "rgba(30, 99, 233, 0.1)",
+    name: "VOLANTIS",
   },
   default: {
     primaryColor: "hsl(var(--primary-hsl))",
@@ -38,6 +38,81 @@ const getCompanyBranding = (companyName?: string) => {
     return COMPANY_BRANDING.Volantis;
   }
   return COMPANY_BRANDING.default;
+};
+
+const IosysLogo = () => {
+  return (
+    <svg width="54" height="24" viewBox="0 0 54 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ display: "inline-block", verticalAlign: "middle" }}>
+      <rect width="54" height="24" rx="3" fill="#1F4E47"/>
+      {/* 'i' */}
+      <rect x="5" y="7.5" width="2.2" height="10" rx="0.5" fill="#2CDBA3"/>
+      <circle cx="6.1" cy="4.2" r="1.3" fill="#2CDBA3"/>
+      {/* 'o' */}
+      <circle cx="16.5" cy="12.5" r="5.5" fill="#2CDBA3"/>
+      <path d="M12.5 12.5 C 14 9, 15.5 16, 20.5 12.5" stroke="#1F4E47" strokeWidth="1.8" strokeLinecap="round" fill="none"/>
+      {/* 'S' */}
+      <path d="M31.5 9.5 C30 8.5, 27.5 8.7, 27.5 10.3 C27.5 12.3, 31.5 12, 31.5 14 C31.5 15.7, 29 16.7, 27.5 15.7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+      {/* 'Y' */}
+      <path d="M34.5 7.5 L37.5 12.5 L40.5 7.5 M37.5 12.5 L37.5 17" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+      {/* 'S' */}
+      <path d="M47.5 9.5 C46 8.5, 43.5 8.7, 43.5 10.3 C43.5 12.3, 47.5 12, 47.5 14 C47.5 15.7, 45 16.7, 43.5 15.7" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" fill="none"/>
+    </svg>
+  );
+};
+
+const VolantisLogo = () => {
+  return (
+    <div style={{
+      position: "relative",
+      width: "48px",
+      height: "48px",
+      borderRadius: "50%",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      flexShrink: 0
+    }}>
+      <img
+        alt="Volantis Logo"
+        style={{ width: "100%", height: "100%", objectFit: "contain" }}
+        src="https://lh3.googleusercontent.com/aida-public/AB6AXuAzCPDVoQzCghHXcR7aPTPE9wsXukucixGZNIII769_GI8UBXDCosK_W2cKereznCUfB-_t0M9T97SQf3SF_aKuH6XmREmDpB_Zifcq2tEp3KTbLPMj26_1MLVDl_CbWhCIvQGoFOp6raJSkSFfsnlGh2eVQK7jvFYi1VFm5tkLNuOfiFREahPR5GaD9ZIUGpUIJb88I0uqbH20Q_dFSQFtyDlCPEt7grDS4OuN5zdY3eTms2dKvJquKjaRNRzVEdBHFBs"
+      />
+    </div>
+  );
+};
+
+const renderCompanyBadge = (companyName: string) => {
+  const isIOSYS = companyName.toUpperCase() === "IOSYS";
+  const label = isIOSYS ? "IOSYS" : "Volantis";
+  
+  const textColor = isIOSYS ? "#1a4d44" : "#2563eb";
+  const bgColor = isIOSYS ? "#E6F4F1" : "#e0e7ff";
+  const borderColor = isIOSYS ? "#b9ede0" : "#bfdbfe";
+  const borderRadius = "8px";
+  const padding = "0.375rem 1rem";
+  const fontSize = "0.95rem";
+  const fontFamily = "'Inter', sans-serif";
+  const letterSpacing = "normal";
+  
+  return (
+    <span style={{
+      display: "inline-block",
+      width: "fit-content",
+      fontSize: fontSize,
+      fontFamily: fontFamily,
+      fontWeight: 700,
+      padding: padding,
+      borderRadius: borderRadius,
+      backgroundColor: bgColor,
+      color: textColor,
+      border: `1px solid ${borderColor}`,
+      textTransform: "none",
+      letterSpacing: letterSpacing,
+      lineHeight: 1.2,
+    }}>
+      {label}
+    </span>
+  );
 };
 
 export default function RecruiterLayout({ children }: { children: React.ReactNode }) {
@@ -80,8 +155,200 @@ export default function RecruiterLayout({ children }: { children: React.ReactNod
   const navLinkClass = (path: string) =>
     `sidebar-nav-link${isLinkActive(path) ? " active" : ""}`;
 
+  const companyUpper = user?.activeCompanyName?.toUpperCase();
+  const isIOSYS = companyUpper === "IOSYS";
+  const isVolantis = companyUpper === "VOLANTIS";
+
+  let themeStyles = "";
+  if (isIOSYS) {
+    themeStyles = `
+      @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@600;700;800&family=Inter:wght@500;600;700;800&display=swap');
+      
+      .font-logo-brand-iosys {
+        font-family: 'Manrope', sans-serif !important;
+      }
+
+      :root {
+        --primary-hsl: 171, 43%, 21% !important;
+        --primary-hover-hsl: 171, 43%, 15% !important;
+        --secondary-hsl: 162, 29%, 86% !important; /* secondary-container #d1e7df */
+        --secondary-foreground-hsl: 171, 43%, 21% !important; /* on-secondary-container #1a4d44 */
+        --accent-hsl: 161, 71%, 52% !important;
+        --muted-bg-hsl: 171, 43%, 95% !important;
+        --card-border-hsl: 171, 15%, 88% !important;
+        --background-hsl: 210, 40%, 98% !important;
+        
+        --secondary-bg-hsl: 0, 0%, 100% !important;
+        --secondary-text-hsl: 171, 43%, 21% !important;
+        --secondary-border-hsl: 171, 43%, 21% !important;
+        --secondary-hover-bg-hsl: 171, 43%, 95% !important;
+      }
+
+      .sidebar-nav-link {
+        font-family: 'Inter', sans-serif !important;
+      }
+
+      .sidebar-nav-link.active {
+        font-weight: 700 !important;
+      }
+    `;
+  } else if (isVolantis) {
+    themeStyles = `
+      @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@700;800;900&family=Inter:wght@500;600;700;800&display=swap');
+      
+      .font-logo-brand {
+        font-family: 'Nunito', sans-serif !important;
+        letter-spacing: 0.05em !important;
+      }
+
+      .font-logo-text {
+        font-family: 'Inter', sans-serif !important;
+      }
+
+      :root {
+        --primary-hsl: 220, 82%, 52% !important;
+        --primary-hover-hsl: 217, 91%, 59% !important;
+        --secondary-hsl: 220, 82%, 95% !important;
+        --secondary-foreground-hsl: 220, 82%, 52% !important;
+        --accent-hsl: 217, 91%, 59% !important;
+        --muted-bg-hsl: 220, 82%, 95% !important;
+        --card-border-hsl: 220, 15%, 88% !important;
+        --background-hsl: 210, 40%, 98% !important;
+        
+        --secondary-bg-hsl: 0, 0%, 100% !important;
+        --secondary-text-hsl: 220, 82%, 52% !important;
+        --secondary-border-hsl: 220, 82%, 52% !important;
+        --secondary-hover-bg-hsl: 220, 82%, 95% !important;
+      }
+
+      .sidebar-nav-link {
+        font-family: 'Inter', sans-serif !important;
+      }
+
+      .sidebar-nav-link.active {
+        font-weight: 700 !important;
+      }
+    `;
+  }
+
+  const renderBranding = () => {
+    if (isIOSYS) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", alignItems: "flex-start", width: "100%" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", width: "100%" }}>
+            <div style={{
+              position: "relative",
+              width: "72px",
+              height: "32px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0
+            }}>
+              <img
+                alt="IOSYS Logo"
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuBk9XFHzYFby7fSTSjWz2GxibEOt4H66uMbk0ligHFVt60PEZpozd_nhxelD-Q_BPZXGjLbwWrpDMruv2_dQcTd0nX5EmUvZ0iL4IYwnPm0xkIBeyGuvTb8d2PqW56QqISqOwXofKvbDsAOPMhzcSSVh2KIcPuNNMSl62cXCIAnylWAUv_d_pHV928OrVrHMAaYWXMfQblPCIThBC1fH6gS1mSovnmBwMTw4kd3vS3Qwmtnqdlh7hbw0C4y0tsaNxudcjs"
+              />
+            </div>
+            <span className="font-logo-brand-iosys" style={{
+              color: "#111827",
+              fontSize: "19px",
+              fontWeight: 700,
+              letterSpacing: "-0.025em",
+              lineHeight: 1
+            }}>
+              Recruiter
+            </span>
+          </div>
+          <div>
+            {renderCompanyBadge(companyUpper || "IOSYS")}
+          </div>
+        </div>
+      );
+    }
+    if (isVolantis) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", alignItems: "flex-start", width: "100%" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", width: "100%" }}>
+            <div style={{
+              position: "relative",
+              width: "32px",
+              height: "32px",
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              flexShrink: 0
+            }}>
+              <img
+                alt="Volantis Logo"
+                style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                src="https://lh3.googleusercontent.com/aida-public/AB6AXuAzCPDVoQzCghHXcR7aPTPE9wsXukucixGZNIII769_GI8UBXDCosK_W2cKereznCUfB-_t0M9T97SQf3SF_aKuH6XmREmDpB_Zifcq2tEp3KTbLPMj26_1MLVDl_CbWhCIvQGoFOp6raJSkSFfsnlGh2eVQK7jvFYi1VFm5tkLNuOfiFREahPR5GaD9ZIUGpUIJb88I0uqbH20Q_dFSQFtyDlCPEt7grDS4OuN5zdY3eTms2dKvJquKjaRNRzVEdBHFBs"
+              />
+            </div>
+            <div style={{ display: "flex", alignItems: "baseline", gap: "0.25rem" }}>
+              <span className="font-logo-brand" style={{
+                color: "#2563eb",
+                fontSize: "19px",
+                fontWeight: 900,
+                textTransform: "uppercase",
+                letterSpacing: "0.05em",
+                lineHeight: 1
+              }}>
+                VOLANTIS
+              </span>
+              <span className="font-logo-text" style={{
+                color: "#111827",
+                fontSize: "19px",
+                fontWeight: 700,
+                letterSpacing: "-0.025em",
+                lineHeight: 1
+              }}>
+                Recruiter
+              </span>
+            </div>
+          </div>
+          <div>
+            {renderCompanyBadge(user.activeCompanyName || "Volantis")}
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: "0.3rem" }}>
+          <span style={{
+            fontSize: "1.4rem",
+            fontWeight: 700,
+            color: "hsl(var(--primary-hsl))",
+            letterSpacing: "-0.01em",
+            lineHeight: 1,
+          }}>
+            VMS
+          </span>
+          <span style={{
+            fontSize: "1.4rem",
+            fontWeight: 700,
+            color: "hsl(var(--foreground-hsl))",
+            letterSpacing: "-0.01em",
+            lineHeight: 1,
+          }}>
+            Recruiter
+          </span>
+        </div>
+        {user.activeCompanyName && (
+          <div style={{ marginTop: "0.25rem" }}>
+            {renderCompanyBadge(user.activeCompanyName)}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   return (
     <div style={{ minHeight: "100vh", display: "flex" }}>
+      {themeStyles && <style dangerouslySetInnerHTML={{ __html: themeStyles }} />}
       {/* Sidebar */}
       <aside style={{
         width: "256px",
@@ -102,48 +369,13 @@ export default function RecruiterLayout({ children }: { children: React.ReactNod
             href="/recruiter/candidates"
             style={{
               display: "flex",
-              alignItems: "baseline",
-              gap: "0.3rem",
+              alignItems: "flex-start",
               textDecoration: "none",
               flexDirection: "column",
             }}
             aria-label="VMS Recruiter — go to Candidates"
           >
-            <div style={{ display: "flex", alignItems: "baseline", gap: "0.3rem" }}>
-              <span style={{
-                fontSize: "1.4rem",
-                fontWeight: 700,
-                color: companyBranding.primaryColor,
-                letterSpacing: "-0.01em",
-                lineHeight: 1,
-              }}>
-                {companyBranding.name}
-              </span>
-              <span style={{
-                fontSize: "1.4rem",
-                fontWeight: 700,
-                color: "hsl(var(--foreground-hsl))",
-                letterSpacing: "-0.01em",
-                lineHeight: 1,
-              }}>
-                Recruiter
-              </span>
-            </div>
-            {user.activeCompanyName && (
-              <div style={{
-                marginTop: "0.25rem",
-                fontSize: "0.875rem",
-                fontWeight: 600,
-                color: companyBranding.primaryColor,
-                backgroundColor: companyBranding.lightColor,
-                padding: "0.25rem 0.5rem",
-                borderRadius: "4px",
-                display: "inline-block",
-                border: `1px solid ${companyBranding.primaryColor}20`,
-              }}>
-                {user.activeCompanyName}
-              </div>
-            )}
+            {renderBranding()}
           </Link>
         </div>
 
@@ -284,16 +516,9 @@ export default function RecruiterLayout({ children }: { children: React.ReactNod
                 {user.email}
               </span>
               {user.activeCompanyName && (
-                <span style={{
-                  fontSize: "0.7rem",
-                  fontWeight: 600,
-                  color: companyBranding.primaryColor,
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                  whiteSpace: "nowrap",
-                }}>
-                  {user.activeCompanyName}
-                </span>
+                <div style={{ marginTop: "0.15rem", marginBottom: "0.15rem" }}>
+                  {renderCompanyBadge(user.activeCompanyName)}
+                </div>
               )}
               <span style={{
                 display: "inline-block",

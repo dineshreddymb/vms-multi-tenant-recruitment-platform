@@ -32,13 +32,13 @@
 }
 
 .secondary {
-  background-color: hsl(var(--secondary-hsl));
-  color: hsl(var(--secondary-foreground-hsl));
-  border-color: hsl(var(--card-border-hsl));
+  background-color: hsl(var(--secondary-bg-hsl, var(--secondary-hsl)));
+  color: hsl(var(--secondary-text-hsl, var(--secondary-foreground-hsl)));
+  border-color: hsl(var(--secondary-border-hsl, var(--card-border-hsl)));
 }
 
 .secondary:hover:not(:disabled) {
-  background-color: hsl(var(--secondary-hover-hsl));
+  background-color: hsl(var(--secondary-hover-bg-hsl, var(--secondary-hover-hsl)));
 }
 
 .danger {
@@ -100,7 +100,7 @@
 .input:focus {
   outline: none;
   border-color: hsl(var(--primary-hsl));
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  box-shadow: 0 0 0 3px hsla(var(--primary-hsl), 0.15);
 }
 
 .inputError {

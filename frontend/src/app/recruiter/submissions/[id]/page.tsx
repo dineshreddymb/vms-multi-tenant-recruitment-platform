@@ -418,7 +418,11 @@ export default function CandidateDetail() {
                     fontSize: "0.875rem",
                     padding: "0.5rem 0.75rem",
                     borderRadius: "var(--radius-md)",
-                    border: "1px solid hsl(var(--card-border-hsl))"
+                    border: "1px solid hsl(var(--card-border-hsl))",
+                    backgroundColor: "hsl(var(--card-hsl))",
+                    color: "hsl(var(--foreground-hsl))",
+                    width: "100%",
+                    resize: "vertical"
                   }}
                   value={editAbout}
                   onChange={(e) => setEditAbout(e.target.value)}

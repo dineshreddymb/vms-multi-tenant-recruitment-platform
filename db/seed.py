@@ -2,7 +2,7 @@ import os
 from argon2 import PasswordHasher
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-from db.models import InternalUser, Department
+from db.models import InternalUser, Department, Vendor, RecruiterCompanyAccess
 from db.connection import SessionLocal
 
 ph = PasswordHasher()
@@ -50,6 +50,27 @@ def seed_database(db: Session = None):
             existing_admin.access_level = "ADMIN"
             existing_admin.status = "ACTIVE"
             print(f"Initial Admin Recruiter {admin_email} already exists. Ensuring details are correct without modifying password.")
+
+        # 1b. Seed RecruiterCompanyAccess for Admin — ensures admin can log in with IOSYS/Volantis context
+        db.flush()  # Ensure admin ID is available
+        admin_user = db.query(InternalUser).filter(
+            func_lower_email_eq(InternalUser.email, admin_email)
+        ).first()
+        if admin_user:
+            allowed_vendors = db.query(Vendor).filter(
+                Vendor.normalized_name.in_(["iosys", "volantis"])
+            ).all()
+            for vendor in allowed_vendors:
+                existing_access = db.query(RecruiterCompanyAccess).filter(
+                    RecruiterCompanyAccess.recruiter_id == admin_user.id,
+                    RecruiterCompanyAccess.company_id == vendor.id
+                ).first()
+                if not existing_access:
+                    db.add(RecruiterCompanyAccess(
+                        recruiter_id=admin_user.id,
+                        company_id=vendor.id
+                    ))
+                    print(f"Seeded RecruiterCompanyAccess for Admin: {vendor.name}")
 
         # 2. Seed Default Departments
         departments = [

@@ -208,6 +208,15 @@ a {
   color: hsl(var(--foreground-hsl));
 }
 
+.sidebar-nav-link:focus {
+  outline: none;
+  background-color: transparent;
+}
+
+.sidebar-nav-link:hover:focus {
+  background-color: hsl(var(--secondary-hsl));
+}
+
 .sidebar-nav-link:focus-visible {
   outline: 2px solid hsl(var(--primary-hsl));
   outline-offset: 2px;
@@ -217,6 +226,10 @@ a {
   background-color: hsl(var(--primary-hsl));
   color: hsl(var(--primary-foreground-hsl));
   font-weight: 600;
+}
+
+.sidebar-nav-link.active:focus {
+  background-color: hsl(var(--primary-hsl));
 }
 
 .sidebar-nav-link.active:hover {

@@ -79,13 +79,14 @@ class Vendor(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     name = Column(String(255), nullable=False)
     normalized_name = Column(String(255), unique=True, nullable=False, index=True)
+    is_tenant = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     # Relationships
     memberships = relationship("VendorUserMembership", back_populates="vendor", cascade="all, delete-orphan")
     users = relationship("VendorUser", back_populates="vendor")
-    submissions = relationship("Submission", back_populates="vendor")
+    submissions = relationship("Submission", back_populates="vendor", foreign_keys="[Submission.vendor_id]")
     resumes = relationship("Resume", back_populates="vendor")
     roles = relationship("JobRole", back_populates="vendor")
 
@@ -291,6 +292,7 @@ class Submission(Base):
     submission_reference = Column(String(100), unique=True, nullable=False)
     candidate_id = Column(UUID(as_uuid=True), ForeignKey("candidates.id", ondelete="RESTRICT"), nullable=False)
     vendor_id = Column(UUID(as_uuid=True), ForeignKey("vendors.id", ondelete="RESTRICT"), nullable=False)
+    submitting_agency_id = Column(UUID(as_uuid=True), ForeignKey("vendors.id", ondelete="RESTRICT"), nullable=True)
     vendor_user_id = Column(UUID(as_uuid=True), ForeignKey("vendor_users.id", ondelete="SET NULL"), nullable=True)
     role_id = Column(UUID(as_uuid=True), ForeignKey("job_roles.id", ondelete="RESTRICT"), nullable=False)
     job_id = Column(String(255), nullable=True)
@@ -310,7 +312,8 @@ class Submission(Base):
 
     # Relationships
     candidate = relationship("Candidate", back_populates="submissions")
-    vendor = relationship("Vendor", back_populates="submissions")
+    vendor = relationship("Vendor", back_populates="submissions", foreign_keys=[vendor_id])
+    submitting_agency = relationship("Vendor", foreign_keys=[submitting_agency_id])
     vendor_user = relationship("VendorUser", back_populates="submissions")
     job_role = relationship("JobRole", back_populates="submissions")
     status_history = relationship("StatusHistory", back_populates="submission", cascade="all, delete-orphan")
