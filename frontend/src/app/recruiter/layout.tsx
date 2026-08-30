@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
@@ -44,6 +44,7 @@ export default function RecruiterLayout({ children }: { children: React.ReactNod
   const { user, loading, logout, isRecruiter, isAdmin } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   
   // Get company branding based on active company
   const companyBranding = getCompanyBranding(user?.activeCompanyName);
@@ -81,9 +82,15 @@ export default function RecruiterLayout({ children }: { children: React.ReactNod
     `sidebar-nav-link${isLinkActive(path) ? " active" : ""}`;
 
   return (
-    <div style={{ minHeight: "100vh", display: "flex" }}>
+    <div className="app-shell">
+      <button
+        type="button"
+        className={`mobile-nav-backdrop${mobileNavOpen ? " open" : ""}`}
+        aria-label="Close navigation"
+        onClick={() => setMobileNavOpen(false)}
+      />
       {/* Sidebar */}
-      <aside style={{
+      <aside className={`app-sidebar${mobileNavOpen ? " open" : ""}`} style={{
         width: "256px",
         minWidth: "256px",
         backgroundColor: "hsl(var(--card-hsl))",
@@ -333,8 +340,22 @@ export default function RecruiterLayout({ children }: { children: React.ReactNod
       </aside>
 
       {/* Main Panel */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", backgroundColor: "hsl(var(--background-hsl))", minWidth: 0 }}>
-        <main style={{ flex: 1, padding: "2.5rem" }}>
+      <div className="app-content" style={{ display: "flex", flexDirection: "column", backgroundColor: "hsl(var(--background-hsl))" }}>
+        <div className="recruiter-mobile-bar">
+          <button
+            type="button"
+            className="mobile-nav-button"
+            aria-label="Open navigation"
+            aria-expanded={mobileNavOpen}
+            onClick={() => setMobileNavOpen(true)}
+          >
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+              <path d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+          </button>
+          <span>Recruiter Portal</span>
+        </div>
+        <main className="app-main" style={{ flex: 1, padding: "2.5rem" }}>
           {children}
         </main>
       </div>

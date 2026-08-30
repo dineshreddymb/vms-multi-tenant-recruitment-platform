@@ -1,4 +1,4 @@
-/* UI CSS Modules - Premium Design System Styles */
+/* UI CSS Modules - Enterprise VMS Design System */
 
 .button {
   display: inline-flex;
@@ -6,13 +6,15 @@
   justify-content: center;
   font-family: inherit;
   font-size: 0.875rem;
-  font-weight: 500;
+  font-weight: 650;
   line-height: 1.25rem;
+  min-height: 42px;
   border-radius: var(--radius-md);
-  padding: 0.5rem 1rem;
+  padding: 0.625rem 1rem;
   border: 1px solid transparent;
   cursor: pointer;
-  transition: all 0.2s ease;
+  box-shadow: var(--shadow-sm);
+  transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
   user-select: none;
   text-decoration: none;
 }
@@ -88,9 +90,10 @@
 .input {
   font-family: inherit;
   font-size: 0.875rem;
-  padding: 0.5rem 0.75rem;
+  min-height: var(--control-height, 42px);
+  padding: 0.625rem 0.75rem;
   border-radius: var(--radius-md);
-  border: 1px solid hsl(var(--card-border-hsl));
+  border: 1px solid hsl(var(--border-strong-hsl, var(--card-border-hsl)));
   background-color: hsl(var(--card-hsl));
   color: hsl(var(--foreground-hsl));
   width: 100%;
@@ -100,7 +103,7 @@
 .input:focus {
   outline: none;
   border-color: hsl(var(--primary-hsl));
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15);
+  box-shadow: 0 0 0 3px hsl(var(--primary-hsl), 0.14);
 }
 
 .inputError {
@@ -120,8 +123,8 @@
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(15, 23, 42, 0.6);
-  backdrop-filter: blur(4px);
+  background-color: rgba(2, 6, 23, 0.68);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
