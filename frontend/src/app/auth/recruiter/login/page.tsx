@@ -26,7 +26,7 @@ export default function RecruiterLogin() {
           "/api/v1/auth/companies?signup=true",
           { skipAuth: true }
         );
-        setCompanies(companiesData);
+        setCompanies(companiesData || []);
       } catch (err) {
         console.error("Failed to fetch companies:", err);
         setError("Failed to load companies. Please refresh the page.");
@@ -128,7 +128,7 @@ export default function RecruiterLogin() {
               label="Company"
               value={companyId}
               onChange={(e) => setCompanyId(e.target.value)}
-              options={companies.map(company => ({
+              options={(companies || []).map(company => ({
                 value: company.id,
                 label: company.name
               }))}

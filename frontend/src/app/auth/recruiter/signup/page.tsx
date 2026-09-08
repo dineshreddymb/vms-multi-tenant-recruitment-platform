@@ -39,7 +39,7 @@ export default function RecruiterSignup() {
     setError("");
 
     if (selectedCompanies.length === 0) {
-      setError("Select Vendor Companies: Please select at least one vendor company.");
+      setError("Select Organizations You Work For: Please select at least one organization.");
       return;
     }
 
@@ -119,7 +119,7 @@ export default function RecruiterSignup() {
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginBottom: "0.25rem" }}>
             <label style={{ fontSize: "0.875rem", fontWeight: 600, color: "hsl(var(--foreground-hsl))" }}>
-              Select Vendor Companies <span style={{ color: "hsl(var(--danger-hsl, #ef4444))" }}>*</span>
+              Select Organizations You Work For <span style={{ color: "hsl(var(--danger-hsl, #ef4444))" }}>*</span>
             </label>
             <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem 1.5rem", marginTop: "0.25rem" }}>
               {companiesList.map((c) => (
@@ -156,9 +156,9 @@ export default function RecruiterSignup() {
           />
 
           <Input
-            label="Mobile Number (Indian)"
+            label="Mobile Number (with country code)"
             type="tel"
-            placeholder="9876543210"
+            placeholder="+91 9988776655"
             value={mobile}
             onChange={(e) => setMobile(e.target.value)}
             required

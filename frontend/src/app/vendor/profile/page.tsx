@@ -14,7 +14,7 @@ export default function VendorProfile() {
     company_name: string;
     status: string;
   }
-  const [profile, setProfile] = useState<{ id: string; vendor_user_reference: string; name: string; email: string; mobile: string; vendor_id: string; companies: CompanyMembership[] } | null>(null);
+  const [profile, setProfile] = useState<{ id: string; vendor_user_reference: string; name: string; email: string; mobile: string; vendor_id: string; company_name?: string; companies: CompanyMembership[] } | null>(null);
   const [name, setName] = useState("");
   const [mobile, setMobile] = useState("");
   const [loading, setLoading] = useState(true);
@@ -26,7 +26,7 @@ export default function VendorProfile() {
     setLoading(true);
     setError("");
     try {
-      const data = await api.get<{ id: string; vendor_user_reference: string; name: string; email: string; mobile: string; vendor_id: string; companies: CompanyMembership[] }>("/api/v1/vendor/profile");
+      const data = await api.get<{ id: string; vendor_user_reference: string; name: string; email: string; mobile: string; vendor_id: string; company_name?: string; companies: CompanyMembership[] }>("/api/v1/vendor/profile");
       setProfile(data);
       setName(data.name);
       setMobile(data.mobile);
@@ -141,7 +141,7 @@ export default function VendorProfile() {
           <div style={{ gridColumn: "span 2", marginTop: "0.5rem" }}>
             <label style={{ fontSize: "0.8rem", color: "hsl(var(--muted-hsl))", fontWeight: 500 }}>Company</label>
             <div style={{ fontSize: "0.9rem", fontWeight: 600, marginTop: "0.25rem" }}>
-              {profile?.companies?.find(c => c.vendor_id === profile.vendor_id)?.company_name || "N/A"}
+              {profile?.company_name || "N/A"}
             </div>
           </div>
         </div>
@@ -157,12 +157,12 @@ export default function VendorProfile() {
         />
 
         <Input
-          label="Mobile Number (Indian)"
+          label="Mobile Number (with country code)"
           type="tel"
           value={mobile}
           onChange={(e) => setMobile(e.target.value)}
           required
-          placeholder="Mobile Number"
+          placeholder="+91 9988776655"
         />
 
         <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "0.5rem" }}>

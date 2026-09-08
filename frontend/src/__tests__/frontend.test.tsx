@@ -86,6 +86,15 @@ describe("VMS Frontend Tests", () => {
     mockUser = null;
     mockIsAdmin = false;
     mockIsRecruiter = false;
+    (api.get as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes("/api/v1/auth/companies")) {
+        return Promise.resolve([
+          { id: "c1", name: "IOSYS" },
+          { id: "c2", name: "Volantis" }
+        ]);
+      }
+      return Promise.resolve([]);
+    });
   });
 
   // 1. Vendor Login rendering/flow
@@ -95,7 +104,7 @@ describe("VMS Frontend Tests", () => {
 
     // Rendering check
     expect(screen.getByText("Vendor Login")).toBeInTheDocument();
-    
+
     // Self-signup check: verify there IS a link to vendor signup page
     const links = screen.queryAllByRole("link");
     const hasVendorSignup = links.some(link => link.getAttribute("href")?.includes("vendor/signup"));
@@ -131,7 +140,7 @@ describe("VMS Frontend Tests", () => {
     fireEvent.click(submitButton);
 
     await waitFor(() => {
-      expect(mockLogin).toHaveBeenCalledWith("recruiter@company.com", "password123", "recruiter");
+      expect(mockLogin).toHaveBeenCalledWith("recruiter@company.com", "password123", "recruiter", undefined);
     });
   });
 
@@ -145,7 +154,7 @@ describe("VMS Frontend Tests", () => {
   // 4. Vendor dashboard pagination behavior & Vendor submission API pagination request
   test("Vendor dashboard server-side pagination flow", async () => {
     mockUser = { id: "v1", email: "vendor@company.com", role: "vendor" };
-    
+
     // Set up mock api calls
     (api.get as jest.Mock).mockImplementation((url: string) => {
       if (url.includes("/vendor/submissions")) {
@@ -181,12 +190,10 @@ describe("VMS Frontend Tests", () => {
 
     await waitFor(() => {
       expect(api.get).toHaveBeenCalledWith("/api/v1/vendor/submissions?page=1&page_size=10");
+      expect(screen.getByText("SUB-REF-1")).toBeInTheDocument();
+      expect(screen.getByText("JOB-REF-1")).toBeInTheDocument();
     });
 
-    // Check rendering of first item reference and job_id
-    expect(screen.getByText("SUB-REF-1")).toBeInTheDocument();
-    expect(screen.getByText("JOB-REF-1")).toBeInTheDocument();
-    
     // Check page text with narrow custom matcher that targets the SPAN containing the text
     expect(screen.getByText((content, element) => {
       return element?.tagName === "SPAN" && element?.textContent?.trim().replace(/\s+/g, " ").includes("Showing Page 1 of 2");
@@ -198,10 +205,9 @@ describe("VMS Frontend Tests", () => {
 
     await waitFor(() => {
       expect(api.get).toHaveBeenCalledWith("/api/v1/vendor/submissions?page=2&page_size=10");
+      expect(screen.getByText("SUB-REF-2")).toBeInTheDocument();
+      expect(screen.getByText("JOB-REF-2")).toBeInTheDocument();
     });
-
-    expect(screen.getByText("SUB-REF-2")).toBeInTheDocument();
-    expect(screen.getByText("JOB-REF-2")).toBeInTheDocument();
   });
 
   // 5. Recruiter candidate pagination
@@ -272,7 +278,7 @@ describe("VMS Frontend Tests", () => {
     });
 
     expect(screen.getByText("Vendor Corp")).toBeInTheDocument();
-    
+
     // Verify business headers are in the document
     expect(screen.getByRole("columnheader", { name: "Company" })).toBeInTheDocument();
     expect(screen.getByRole("columnheader", { name: "Candidate Name" })).toBeInTheDocument();
@@ -811,7 +817,7 @@ describe("VMS Frontend Tests", () => {
   // 9. Resume eligibility submit-button gate
   test("Resume eligibility submit button gate", async () => {
     mockUser = { id: "v1", email: "vendor@company.com", role: "vendor" };
-    
+
     (api.get as jest.Mock).mockImplementation((url: string) => {
       if (url.includes("/departments")) {
         return Promise.resolve([{ id: "d1", name: "Engineering" }]);
@@ -999,7 +1005,7 @@ describe("VMS Frontend Tests", () => {
     };
 
     (api.get as jest.Mock).mockResolvedValueOnce([mockUserRecord]);
-    
+
     // Mock the confirm window function
     const originalConfirm = window.confirm;
     window.confirm = jest.fn().mockReturnValue(true);
@@ -1024,7 +1030,7 @@ describe("VMS Frontend Tests", () => {
 
     // Verify API is called with correct user ID
     expect(api.post).toHaveBeenCalledWith("/api/v1/recruiter/vendor-users/vu-864/disable");
-    
+
     // Verify state updates locally to DISABLED and button changes to "Reactivate"
     await waitFor(() => {
       expect(screen.getByText("DISABLED")).toBeInTheDocument();
@@ -1041,7 +1047,7 @@ describe("VMS Frontend Tests", () => {
 
     // Verify API is called with correct user ID (no undefined)
     expect(api.post).toHaveBeenCalledWith("/api/v1/recruiter/vendor-users/vu-864/reactivate");
-    
+
     // Verify state updates locally back to ACTIVE and button reverts to "Disable"
     await waitFor(() => {
       expect(screen.getByText("ACTIVE")).toBeInTheDocument();
@@ -1531,7 +1537,7 @@ describe("VMS Frontend Tests", () => {
       // 2. Upload file
       const file = new File(["dummy content"], "resume.pdf", { type: "application/pdf" });
       const fileInput = container.querySelector('input[type="file"]')!;
-      
+
       await act(async () => {
         fireEvent.change(fileInput, { target: { files: [file] } });
       });
@@ -1632,7 +1638,7 @@ describe("VMS Frontend Tests", () => {
       // 2. Upload file
       const file = new File(["dummy content"], "resume.pdf", { type: "application/pdf" });
       const fileInput = container.querySelector('input[type="file"]')!;
-      
+
       await act(async () => {
         fireEvent.change(fileInput, { target: { files: [file] } });
       });
@@ -1654,6 +1660,172 @@ describe("VMS Frontend Tests", () => {
       await waitFor(() => {
         expect(screen.getByText("Candidate submitted successfully! Redirecting to dashboard...")).toBeInTheDocument();
       });
+    });
+
+    test("TEST 8: Extracted resume data automatically populates candidate form fields when empty", async () => {
+      mockUser = { id: "v1", email: "vendor@company.com", role: "vendor", activeCompanyName: "IOSYS" };
+
+      (api.get as jest.Mock).mockImplementation((url: string) => {
+        if (url.includes("/departments")) {
+          return Promise.resolve([{ id: "d1", name: "Engineering", status: "ACTIVE" }]);
+        }
+        if (url.includes("/job-roles")) {
+          return Promise.resolve([{ id: "r1", department_id: "d1", title: "Dev", job_id: "JOB-DEV-01", status: "ACTIVE" }]);
+        }
+        if (url.includes("/resumes/res-extract-1/status")) {
+          return Promise.resolve({
+            malware_scan_state: "CLEAN",
+            processing_state: "COMPLETED",
+            eligibility_state: "ELIGIBLE",
+            extracted_data: {
+              name: "Alice Developer",
+              email: "alice@example.com",
+              contact_number: "+919876543210",
+              experience: 4.5,
+              skills: ["React", "TypeScript", "FastAPI"]
+            }
+          });
+        }
+        return Promise.resolve([]);
+      });
+
+      (api.post as jest.Mock).mockImplementation((url: string) => {
+        if (url.includes("/resumes")) {
+          return Promise.resolve({ resume_id: "res-extract-1" });
+        }
+        return Promise.resolve({});
+      });
+
+      const { container } = render(<SubmitCandidate />);
+
+      // Upload file with empty form
+      const file = new File(["dummy content"], "alice_resume.pdf", { type: "application/pdf" });
+      const fileInput = container.querySelector('input[type="file"]')!;
+
+      await act(async () => {
+        fireEvent.change(fileInput, { target: { files: [file] } });
+      });
+
+      // Wait for scanning polling to complete and mark as eligible
+      await waitFor(() => {
+        expect(screen.getByText("Resume verified and eligible for submission!")).toBeInTheDocument();
+      });
+
+      // Verify fields auto-populated
+      await waitFor(() => {
+        expect((screen.getByLabelText(/Candidate Full Name/i) as HTMLInputElement).value).toBe("Alice Developer");
+        expect((screen.getByLabelText(/Email Address/i) as HTMLInputElement).value).toBe("alice@example.com");
+        expect((screen.getByLabelText(/Contact Number/i) as HTMLInputElement).value).toBe("+919876543210");
+        expect((screen.getByLabelText(/Total Experience/i) as HTMLInputElement).value).toBe("4.5");
+        expect((screen.getByPlaceholderText(/Provide a brief summary/i) as HTMLTextAreaElement).value).toBe("Key skills: React, TypeScript, FastAPI");
+      });
+    });
+
+    test("TEST 9: Manually entered candidate fields are NOT overwritten when resume extraction completes", async () => {
+      mockUser = { id: "v1", email: "vendor@company.com", role: "vendor", activeCompanyName: "Volantis" };
+
+      (api.get as jest.Mock).mockImplementation((url: string) => {
+        if (url.includes("/departments")) {
+          return Promise.resolve([{ id: "d1", name: "Engineering", status: "ACTIVE" }]);
+        }
+        if (url.includes("/job-roles")) {
+          return Promise.resolve([{ id: "r1", department_id: "d1", title: "Dev", job_id: "JOB-DEV-01", status: "ACTIVE" }]);
+        }
+        if (url.includes("/resumes/res-extract-2/status")) {
+          return Promise.resolve({
+            malware_scan_state: "CLEAN",
+            processing_state: "COMPLETED",
+            eligibility_state: "ELIGIBLE",
+            extracted_data: {
+              name: "Extracted Name",
+              email: "extracted@example.com",
+              contact_number: "+919999999999",
+              experience: 8.0,
+              skills: ["Python"]
+            }
+          });
+        }
+        return Promise.resolve([]);
+      });
+
+      (api.post as jest.Mock).mockImplementation((url: string) => {
+        if (url.includes("/resumes")) {
+          return Promise.resolve({ resume_id: "res-extract-2" });
+        }
+        return Promise.resolve({});
+      });
+
+      const { container } = render(<SubmitCandidate />);
+
+      // Pre-fill Name and Email manually before resume upload finishes
+      fireEvent.change(screen.getByLabelText(/Candidate Full Name/i), { target: { value: "Manually Typed Name" } });
+      fireEvent.change(screen.getByLabelText(/Email Address/i), { target: { value: "manual@example.com" } });
+
+      // Upload resume
+      const file = new File(["dummy content"], "resume2.pdf", { type: "application/pdf" });
+      const fileInput = container.querySelector('input[type="file"]')!;
+
+      await act(async () => {
+        fireEvent.change(fileInput, { target: { files: [file] } });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText("Resume verified and eligible for submission!")).toBeInTheDocument();
+      });
+
+      // Verify manual values were PRESERVED, while empty fields were populated
+      await waitFor(() => {
+        expect((screen.getByLabelText(/Candidate Full Name/i) as HTMLInputElement).value).toBe("Manually Typed Name");
+        expect((screen.getByLabelText(/Email Address/i) as HTMLInputElement).value).toBe("manual@example.com");
+        expect((screen.getByLabelText(/Contact Number/i) as HTMLInputElement).value).toBe("+919999999999");
+        expect((screen.getByLabelText(/Total Experience/i) as HTMLInputElement).value).toBe("8");
+      });
+    });
+
+    test("TEST 10: Infected/failed resumes do not populate candidate fields", async () => {
+      mockUser = { id: "v1", email: "vendor@company.com", role: "vendor" };
+
+      (api.get as jest.Mock).mockImplementation((url: string) => {
+        if (url.includes("/departments")) {
+          return Promise.resolve([{ id: "d1", name: "Engineering", status: "ACTIVE" }]);
+        }
+        if (url.includes("/resumes/res-infected/status")) {
+          return Promise.resolve({
+            malware_scan_state: "INFECTED",
+            processing_state: "FAILED",
+            eligibility_state: "INELIGIBLE",
+            extracted_data: {
+              name: "Malicious Name",
+              email: "virus@evil.com"
+            }
+          });
+        }
+        return Promise.resolve([]);
+      });
+
+      (api.post as jest.Mock).mockImplementation((url: string) => {
+        if (url.includes("/resumes")) {
+          return Promise.resolve({ resume_id: "res-infected" });
+        }
+        return Promise.resolve({});
+      });
+
+      const { container } = render(<SubmitCandidate />);
+
+      const file = new File(["dummy content"], "virus.pdf", { type: "application/pdf" });
+      const fileInput = container.querySelector('input[type="file"]')!;
+
+      await act(async () => {
+        fireEvent.change(fileInput, { target: { files: [file] } });
+      });
+
+      await waitFor(() => {
+        expect(screen.getByText(/Security gate failure: Malware detected/i)).toBeInTheDocument();
+      });
+
+      // Verify fields remain empty
+      expect((screen.getByLabelText(/Candidate Full Name/i) as HTMLInputElement).value).toBe("");
+      expect((screen.getByLabelText(/Email Address/i) as HTMLInputElement).value).toBe("");
     });
   });
 

@@ -61,12 +61,12 @@ describe("Vendor Submit Candidate Pre-selected Job Company Locking", () => {
     jest.clearAllMocks();
   });
 
-  it("locks the company select and calls setActiveVendorId when routing from a job", async () => {
+  it("locks the company select and never switches company context when routing from a job", async () => {
     render(<SubmitCandidate />);
 
-    // Wait for mount
+    // Wait for mount and verify setActiveVendorId is not called
     await waitFor(() => {
-      expect(mockSetActiveVendorId).toHaveBeenCalledWith("vendor-iosys");
+      expect(mockSetActiveVendorId).not.toHaveBeenCalled();
     });
 
     // Verify company name is rendered as a locked badge

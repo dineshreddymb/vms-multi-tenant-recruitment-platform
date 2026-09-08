@@ -6,6 +6,7 @@ import { api } from "@/lib/api-client";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
 import { useAuth } from "@/context/AuthContext";
+import { CompanyBadge, getCompanyBranding } from "@/components/CompanyBranding";
 
 interface Submission {
   id: string;
@@ -31,7 +32,7 @@ interface PaginatedResponse {
 }
 
 export default function VendorDashboard() {
-  const { user, setActiveVendorId } = useAuth();
+  const { user } = useAuth();
   const [data, setData] = useState<PaginatedResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -42,9 +43,9 @@ export default function VendorDashboard() {
     setLoading(true);
     setError("");
     try {
-      const vendorQuery = user?.activeVendorId ? `&vendor_id=${user.activeVendorId}` : "";
+      // No vendor_id query param — backend uses JWT company context exclusively
       const response = await api.get<PaginatedResponse>(
-        `/api/v1/vendor/submissions?page=${pageNum}&page_size=${pageSize}${vendorQuery}`
+        `/api/v1/vendor/submissions?page=${pageNum}&page_size=${pageSize}`
       );
       setData(response);
     } catch (err) {
@@ -57,7 +58,7 @@ export default function VendorDashboard() {
 
   useEffect(() => {
     fetchSubmissions(page);
-  }, [page, user?.activeVendorId]);
+  }, [page]);
 
   const handlePrevPage = () => {
     if (page > 1) setPage(page - 1);
@@ -66,6 +67,8 @@ export default function VendorDashboard() {
   const handleNextPage = () => {
     if (data && page < data.total_pages) setPage(page + 1);
   };
+
+  const branding = getCompanyBranding(user?.activeCompanyName);
 
   const getStatusStyle = (status: string) => {
     const base = {
@@ -78,7 +81,7 @@ export default function VendorDashboard() {
     };
     switch (status) {
       case "SUBMITTED":
-        return { ...base, backgroundColor: "rgba(37, 99, 235, 0.1)", color: "hsl(var(--primary-hsl))" };
+        return { ...base, backgroundColor: branding.lightColor, color: branding.primaryColor };
       case "SCREENING":
       case "INTERVIEW":
       case "SELECTED":
@@ -103,26 +106,11 @@ export default function VendorDashboard() {
           </p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          {user?.companies && user.companies.length > 1 && (
+          {/* Read-only company badge — company is locked to the session JWT */}
+          {user?.activeCompanyName && (
             <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
               <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>Company:</span>
-              <select
-                value={user.activeVendorId || ""}
-                onChange={(e) => setActiveVendorId(e.target.value)}
-                style={{
-                  padding: "0.4rem 0.75rem",
-                  borderRadius: "4px",
-                  border: "1px solid hsl(var(--card-border-hsl))",
-                  backgroundColor: "hsl(var(--card-hsl))",
-                  fontWeight: 600,
-                  fontSize: "0.875rem",
-                  cursor: "pointer"
-                }}
-              >
-                {user.companies.map((c) => (
-                  <option key={c.vendor_id} value={c.vendor_id}>{c.company_name}</option>
-                ))}
-              </select>
+              <CompanyBadge companyName={user.activeCompanyName} />
             </div>
           )}
           <Link href="/vendor/job-roles">

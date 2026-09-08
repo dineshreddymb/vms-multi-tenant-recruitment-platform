@@ -56,6 +56,7 @@ export default function JobRoleManagement() {
   // AI JD Generation State
   const [aiJdRequirements, setAiJdRequirements] = useState("");
   const [generatedJdText, setGeneratedJdText] = useState("");
+  const [createJdText, setCreateJdText] = useState("");
   const [generatingJd, setGeneratingJd] = useState(false);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
 
@@ -89,7 +90,7 @@ export default function JobRoleManagement() {
           return api.get<Department[]>("/api/v1/departments").catch(() => [] as Department[]);
         }),
         api.get<string[]>("/api/v1/recruiter/job-role-options").catch(() => [] as string[]),
-        api.get<Company[]>("/api/v1/auth/companies").catch(() => [] as Company[])
+        api.get<Company[]>("/api/v1/auth/companies?is_tenant=true").catch(() => [] as Company[])
       ]);
       setRoles(rolesList);
       setDepartments(deptsList);
@@ -236,6 +237,8 @@ export default function JobRoleManagement() {
       formData.append("vendor_id", createCompanyId.trim());
       if (createJdFile) {
         formData.append("file", createJdFile);
+      } else if (createJdText) {
+        formData.append("jd_text", createJdText);
       }
 
       const newRole = await api.post<JobRole>("/api/v1/recruiter/job-roles", formData);
@@ -258,6 +261,7 @@ export default function JobRoleManagement() {
       setCreateJobId("");
       setCreateCompanyId("");
       setCreateJdFile(null);
+      setCreateJdText("");
       setIsCreateOpen(false);
     } catch (err) {
       const errorObj = err as { detail?: string; status?: number };
@@ -298,10 +302,11 @@ export default function JobRoleManagement() {
       if (!confirmReplace) return;
     }
     
-    const file = new File([generatedJdText], "generated_jd.txt", { type: "text/plain" });
-    setCreateJdFile(file);
+    setCreateJdText(generatedJdText);
+    setCreateJdFile(null);
     setAiJdRequirements("");
     setGeneratedJdText("");
+    setIsPreviewOpen(false);
   };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
@@ -714,6 +719,7 @@ export default function JobRoleManagement() {
               onChange={(e) => {
                 if (e.target.files && e.target.files[0]) {
                   setCreateJdFile(e.target.files[0]);
+                  setCreateJdText("");
                 }
               }}
               style={{
@@ -731,6 +737,18 @@ export default function JobRoleManagement() {
                 <button
                   type="button"
                   onClick={() => setCreateJdFile(null)}
+                  style={{ background: "none", border: "none", color: "hsl(var(--danger-hsl))", cursor: "pointer", fontSize: "0.8rem" }}
+                >
+                  Clear
+                </button>
+              </div>
+            )}
+            {createJdText && (
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8rem", color: "hsl(var(--primary-hsl))", marginTop: "0.2rem" }}>
+                <span>Selected: <strong>generated_jd.pdf (AI Generated)</strong></span>
+                <button
+                  type="button"
+                  onClick={() => setCreateJdText("")}
                   style={{ background: "none", border: "none", color: "hsl(var(--danger-hsl))", cursor: "pointer", fontSize: "0.8rem" }}
                 >
                   Clear
@@ -1090,24 +1108,44 @@ export default function JobRoleManagement() {
       <Modal
         isOpen={isPreviewOpen}
         onClose={() => setIsPreviewOpen(false)}
-        title="Job Description Preview"
+        title="AI Generated Job Description"
         footerButtons={
-          <Button onClick={() => setIsPreviewOpen(false)}>Close</Button>
+          <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+            <Button
+              variant="outline"
+              onClick={() => setIsPreviewOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleProceedWithGeneratedJd}>
+              Use This JD
+            </Button>
+          </div>
         }
       >
-        <div style={{
-          maxHeight: "60vh",
-          overflowY: "auto",
-          whiteSpace: "pre-wrap",
-          padding: "1rem",
-          backgroundColor: "hsl(var(--muted-bg-hsl))",
-          borderRadius: "var(--radius-md)",
-          border: "1px solid hsl(var(--card-border-hsl))",
-          fontFamily: "monospace",
-          fontSize: "0.85rem",
-          color: "hsl(var(--foreground-hsl))"
-        }}>
-          {generatedJdText}
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <div style={{ fontSize: "0.875rem", color: "hsl(var(--muted-hsl))", marginBottom: "0.25rem" }}>
+            Review and make any necessary adjustments to the AI-generated Job Description below before proceeding.
+          </div>
+          <textarea
+            value={generatedJdText}
+            onChange={(e) => setGeneratedJdText(e.target.value)}
+            style={{
+              width: "100%",
+              minHeight: "450px",
+              maxHeight: "60vh",
+              overflowY: "auto",
+              padding: "1rem",
+              fontSize: "0.95rem",
+              lineHeight: "1.6",
+              fontFamily: "system-ui, -apple-system, sans-serif",
+              border: "1px solid hsl(var(--card-border-hsl))",
+              borderRadius: "var(--radius-md)",
+              backgroundColor: "hsl(var(--card-hsl))",
+              color: "hsl(var(--foreground-hsl))",
+              resize: "vertical"
+            }}
+          />
         </div>
       </Modal>
     </div>

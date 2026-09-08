@@ -2,7 +2,7 @@ import uuid
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
-from db.models import Vendor, VendorUser, JobRole, Candidate, Submission, RecruiterCompanyAccess, InternalUser, Resume
+from db.models import Vendor, VendorUser, VendorUserMembership, JobRole, Candidate, Submission, RecruiterCompanyAccess, InternalUser, Resume
 from backend.auth import hash_password
 
 def test_tenant_isolation_recruiter_pipeline_and_checks(client: TestClient, db_session: Session):
@@ -69,7 +69,13 @@ def test_tenant_isolation_recruiter_pipeline_and_checks(client: TestClient, db_s
     db_session.commit()
 
     # 6. Vendor user logs in and submits Candidate A to IOSYS
-    v_login = client.post("/api/v1/auth/vendor/login", json={"email": "vendor@agency.com", "password": "Password123!"})
+    db_session.add_all([
+        VendorUserMembership(vendor_user_id=vendor_user.id, vendor_id=iosys.id, status="ACTIVE"),
+        VendorUserMembership(vendor_user_id=vendor_user.id, vendor_id=volantis.id, status="ACTIVE")
+    ])
+    db_session.commit()
+
+    v_login = client.post("/api/v1/auth/vendor/login", json={"email": "vendor@agency.com", "password": "Password123!", "company_id": str(iosys.id)})
     assert v_login.status_code == 200
     v_headers = {"Authorization": f"Bearer {v_login.json()['access_token']}"}
 
@@ -166,11 +172,16 @@ def test_tenant_isolation_recruiter_pipeline_and_checks(client: TestClient, db_s
     assert forgery_resp_rev.status_code == 403
 
     # 10. Same-Candidate Cross-Tenant & PAN Isolation validation:
+    # Login to Volantis session context
+    v_login_vol = client.post("/api/v1/auth/vendor/login", json={"email": "vendor@agency.com", "password": "Password123!", "company_id": str(volantis.id)})
+    assert v_login_vol.status_code == 200
+    v_headers_vol = {"Authorization": f"Bearer {v_login_vol.json()['access_token']}"}
+
     # Submit the SAME Candidate A (same PAN ABCDE1234Z) under VOLANTIS within the 90 days.
     # On the Volantis side, PAN policy check should pass (no active Volantis submission).
     pan_check_vol = client.post(
         "/api/v1/pan/check",
-        headers={"Authorization": f"Bearer {v_login.json()['access_token']}"},
+        headers=v_headers_vol,
         json={"pan": "ABCDE1234Z", "role_id": str(volantis_role.id)}
     )
     assert pan_check_vol.status_code == 200
@@ -200,9 +211,11 @@ def test_tenant_isolation_recruiter_pipeline_and_checks(client: TestClient, db_s
     payload_b["resume_id"] = str(resume_b.id)
     payload_b["name"] = "Candidate A (Volantis Edition)"
 
+    h_b = v_headers_vol.copy()
+    h_b["Idempotency-Key"] = str(uuid.uuid4())
     sub_resp_b = client.post(
         "/api/v1/submissions",
-        headers={"Authorization": f"Bearer {v_login.json()['access_token']}", "Idempotency-Key": str(uuid.uuid4())},
+        headers=h_b,
         json=payload_b
     )
     assert sub_resp_b.status_code == 201

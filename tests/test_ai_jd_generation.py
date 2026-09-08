@@ -47,7 +47,7 @@ def create_test_setup(db: Session):
         )
         db.add(recruiter)
         db.flush()
-    
+
     # Add company access for recruiter
     # Check if access already exists
     access = db.query(RecruiterCompanyAccess).filter(
@@ -97,7 +97,7 @@ def test_generate_jd_success(mock_groq, client: TestClient, db_session: Session)
         json={"requirements": requirements},
         headers=headers
     )
-    
+
     assert resp.status_code == 200
     data = resp.json()
     assert "jd" in data
@@ -132,7 +132,7 @@ def test_generate_jd_prompt_injection(mock_groq, client: TestClient, db_session:
         json={"requirements": malicious_input},
         headers=headers
     )
-    
+
     assert resp.status_code == 200
     # The request should remain a normal JD request and pass requirements directly to LLM without running any queries/tools
     mock_client.chat.completions.create.assert_called_once()
@@ -249,7 +249,7 @@ def test_generate_jd_timeout(mock_groq, client: TestClient, db_session: Session)
 
 def test_generate_jd_vendor_and_unauthorized_denied(client: TestClient, db_session: Session):
     dept, recruiter, vendor, user = create_test_setup(db_session)
-    
+
     # 1. Vendor user attempts to generate
     vendor_headers = get_auth_header(client, "vendor_ai_test@corp.com", is_vendor=True)
     resp_vendor = client.post(
@@ -265,3 +265,56 @@ def test_generate_jd_vendor_and_unauthorized_denied(client: TestClient, db_sessi
         json={"requirements": "Need Python developer"}
     )
     assert resp_unauth.status_code == 401
+
+
+def test_generate_jd_pdf_bytes():
+    from backend.pdf_generator import generate_jd_pdf
+    pdf_bytes = generate_jd_pdf("Go Developer", "Job Summary\nThis is a job summary.\n\nKey Responsibilities\n- Build APIs\n- Test code")
+    assert pdf_bytes.startswith(b"%PDF")
+
+
+def test_generate_jd_pdf_multi_page():
+    from backend.pdf_generator import generate_jd_pdf
+    # Creating a very long content to trigger multi-page layout
+    long_content = "This is a sentence that will be repeated many times to overflow a page. " * 300
+    pdf_bytes = generate_jd_pdf("Long Job Title", long_content)
+    assert pdf_bytes.startswith(b"%PDF")
+
+
+def test_create_job_role_with_ai_jd_text(client: TestClient, db_session: Session):
+    dept, recruiter, vendor, user = create_test_setup(db_session)
+    headers = get_auth_header(client, "recruiter_ai_test@corp.com")
+
+    import uuid
+    job_id = f"job-ai-test-{uuid.uuid4().hex[:6]}"
+
+    resp = client.post(
+        "/api/v1/recruiter/job-roles",
+        data={
+            "department_id": str(dept.id),
+            "title": "AI Test Role Title",
+            "job_id": job_id,
+            "vendor_id": str(vendor.id),
+            "jd_text": "Job Summary\nThis is the content for AI JD."
+        },
+        headers=headers
+    )
+
+    assert resp.status_code == 201
+    data = resp.json()
+    assert data["jd_filename"] == "generated_jd.pdf"
+
+    from db.models import JobRole
+    role = db_session.query(JobRole).filter(JobRole.job_id == job_id).first()
+    assert role is not None
+    assert role.jd_filename == "generated_jd.pdf"
+    assert role.jd_content_type == "application/pdf"
+    assert role.jd_file_size > 0
+    assert role.jd_file_path is not None
+
+    if role:
+        import os
+        if role.jd_file_path and os.path.exists(role.jd_file_path):
+            os.remove(role.jd_file_path)
+        db_session.delete(role)
+        db_session.commit()

@@ -2,7 +2,7 @@ import re
 from uuid import UUID
 from datetime import datetime, date
 from decimal import Decimal
-from typing import Optional, List, Literal
+from typing import Optional, List, Literal, Dict, Any
 from pydantic import BaseModel, EmailStr, Field, field_validator, model_validator
 
 # Indian PAN Validation Regex (5 letters, 4 digits, 1 letter)
@@ -10,6 +10,38 @@ PAN_REGEX = re.compile(r"^[A-Z]{5}[0-9]{4}[A-Z]{1}$", re.IGNORECASE)
 
 # Indian Mobile Validation Regex (optional +91/0, followed by 10 digits starting with 6-9)
 MOBILE_REGEX = re.compile(r"^(?:\+91|0)?[6-9]\d{9}$")
+
+# International Mobile Validation Regex (starts with '+', followed by country calling code 1-9 and digits, allowing optional single spaces or hyphens)
+INTERNATIONAL_MOBILE_REGEX = re.compile(r"^\+[1-9]\d{0,3}(?:[ -]?\d+)+$")
+
+def validate_international_mobile(v: str) -> str:
+    if not v or not v.strip():
+        raise ValueError("Mobile number is required.")
+    cleaned = v.strip()
+    if not INTERNATIONAL_MOBILE_REGEX.match(cleaned):
+        raise ValueError("Invalid international mobile number. Must start with '+' followed by country code (e.g. +91 9988776655).")
+    digits = re.sub(r"\D", "", cleaned)
+    if not (7 <= len(digits) <= 15):
+        raise ValueError("Invalid international mobile number length. Total digits must be between 7 and 15.")
+    return cleaned
+
+def validate_mobile_with_legacy_fallback(v: Optional[str]) -> Optional[str]:
+    if v is None:
+        return None
+    cleaned = v.strip()
+    if not cleaned:
+        raise ValueError("Mobile number cannot be empty.")
+    if cleaned.startswith("+"):
+        if not INTERNATIONAL_MOBILE_REGEX.match(cleaned):
+            raise ValueError("Invalid international mobile number. Must start with '+' followed by country code (e.g. +91 9988776655).")
+        digits = re.sub(r"\D", "", cleaned)
+        if not (7 <= len(digits) <= 15):
+            raise ValueError("Invalid international mobile number length. Total digits must be between 7 and 15.")
+        return cleaned
+    # Legacy fallback: accept existing Indian mobile numbers without '+'
+    if MOBILE_REGEX.match(cleaned):
+        return cleaned
+    raise ValueError("Invalid international mobile number. Must start with '+' followed by country code (e.g. +91 9988776655).")
 
 # ----------------- AUTH & SIGNUP SCHEMAS -----------------
 
@@ -23,9 +55,7 @@ class RecruiterSignupRequestSchema(BaseModel):
 
     @field_validator("mobile")
     def validate_mobile(cls, v):
-        if not MOBILE_REGEX.match(v.strip()):
-            raise ValueError("Invalid Indian mobile number. Must be 10 digits optionally prefixed with +91 or 0.")
-        return v.strip()
+        return validate_international_mobile(v)
 
     @model_validator(mode="after")
     def validate_signup(self) -> "RecruiterSignupRequestSchema":
@@ -66,36 +96,27 @@ class VendorSignupRequestSchema(BaseModel):
 
     @field_validator("mobile")
     def validate_mobile(cls, v):
-        if not MOBILE_REGEX.match(v.strip()):
-            raise ValueError("Invalid Indian mobile number.")
-        return v.strip()
+        return validate_international_mobile(v)
 
     @model_validator(mode="after")
     def normalize_companies(self) -> "VendorSignupRequestSchema":
         if self.password != self.confirm_password:
             raise ValueError("passwords do not match")
-        
+
         if not self.company_name or not self.company_name.strip():
             raise ValueError("Vendor Company Name is required.")
-        
+
         comp_clean = self.company_name.strip()
         if comp_clean.lower() in ["iosys", "volantis"]:
             raise ValueError("Vendor Company Name cannot be IOSYS or Volantis.")
-        
-        selected_companies: List[str] = [comp_clean]
-        canonical_map = {c.lower(): c for c in SUPPORTED_VENDOR_COMPANIES}
-        normalized = []
-        for comp in selected_companies:
-            comp_clean_each = comp.strip()
-            if not comp_clean_each:
-                continue
-            lower = comp_clean_each.lower()
-            resolved = canonical_map.get(lower, comp_clean_each)
-            if resolved not in normalized:
-                normalized.append(resolved)
 
-        self.companies = normalized
-        self.company_name = ", ".join(normalized)
+        self.company_name = comp_clean
+
+        if self.companies is not None:
+            self.companies = [str(c).strip() for c in self.companies if str(c).strip()]
+        else:
+            self.companies = [self.company_name]
+
         return self
 
 class VendorSignupResponseSchema(BaseModel):
@@ -119,9 +140,7 @@ class VendorUserProvisionSchema(BaseModel):
 
     @field_validator("mobile")
     def validate_mobile(cls, v):
-        if not MOBILE_REGEX.match(v.strip()):
-            raise ValueError("Invalid Indian mobile number. Must be 10 digits optionally prefixed with +91 or 0.")
-        return v.strip()
+        return validate_international_mobile(v)
 
 class LoginRequestSchema(BaseModel):
     email: EmailStr
@@ -215,15 +234,14 @@ class VendorProfileUpdateSchema(BaseModel):
 
     @field_validator("mobile")
     def validate_mobile(cls, v):
-        if v is not None and not MOBILE_REGEX.match(v.strip()):
-            raise ValueError("Invalid Indian mobile number.")
-        return v.strip() if v else None
+        return validate_mobile_with_legacy_fallback(v)
 
 class VendorProfileResponseSchema(BaseModel):
     id: UUID
     vendor_user_reference: str
     vendor_id: Optional[UUID] = None  # Legacy primary vendor
     active_vendor_id: Optional[UUID] = None
+    company_name: Optional[str] = None  # Vendor User's employer company (Vendor.name)
     email: str
     name: str
     mobile: str
@@ -333,11 +351,13 @@ class ResumeStatusResponseSchema(BaseModel):
     malware_scan_state: str
     processing_state: str
     eligibility_state: str
-    parser_version: Optional[str]
+    parser_version: Optional[str] = None
     created_at: datetime
+    extracted_data: Optional[Dict[str, Any]] = None
 
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 # ----------------- CANDIDATE SUBMISSION SCHEMAS -----------------
 

@@ -13,11 +13,22 @@ load_dotenv(ENV_FILE)
 ENV = os.getenv("ENV", "development")
 IS_PROD = ENV.lower() in ("production", "prod")
 
+def normalize_database_url(url: str | None) -> str | None:
+    """
+    Normalizes PostgreSQL URL scheme from postgres:// to postgresql:// for SQLAlchemy 2.x compatibility.
+    Preserves credentials, host, port, database name, and query parameters.
+    """
+    if url and url.startswith("postgres://"):
+        return "postgresql://" + url[len("postgres://"):]
+    return url
+
 DATABASE_URL = os.getenv("DATABASE_URL")
 if not DATABASE_URL:
     if IS_PROD:
         raise ValueError("DATABASE_URL environment variable must be set in production.")
     DATABASE_URL = "postgresql://vms_user:vms_password@localhost:5432/vms_db"
+
+DATABASE_URL = normalize_database_url(DATABASE_URL)
 
 
 

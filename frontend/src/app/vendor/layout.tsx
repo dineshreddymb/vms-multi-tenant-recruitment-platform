@@ -1,14 +1,18 @@
 "use client";
 
 import React, { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/Button";
+import { getThemeStyles, CompanyBrandHeader } from "@/components/CompanyBranding";
 
 export default function VendorLayout({ children }: { children: React.ReactNode }) {
   const { user, loading, logout, isVendor } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+
+  const themeStyles = getThemeStyles(user?.activeCompanyName);
 
   useEffect(() => {
     if (!loading && (!user || !isVendor)) {
@@ -32,8 +36,12 @@ export default function VendorLayout({ children }: { children: React.ReactNode }
     );
   }
 
+  const isLinkActive = (path: string) => pathname === path;
+  const avatarInitial = (user.name?.trim() || user.email || "?").charAt(0).toUpperCase();
+
   return (
     <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column" }}>
+      {themeStyles && <style dangerouslySetInnerHTML={{ __html: themeStyles }} />}
       {/* Header */}
       <header style={{
         backgroundColor: "hsl(var(--card-hsl))",
@@ -50,46 +58,72 @@ export default function VendorLayout({ children }: { children: React.ReactNode }
           alignItems: "center",
           maxWidth: "1200px",
           margin: "0 auto",
-          width: "100%"
+          width: "100%",
+          flexWrap: "wrap",
+          gap: "1rem"
         }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "2rem" }}>
-            <Link href="/vendor/dashboard" style={{
-              fontSize: "1.25rem",
-              fontWeight: 700,
-              color: "hsl(var(--foreground-hsl))",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem"
-            }}>
-              <span style={{ color: "hsl(var(--primary-hsl))" }}>VMS</span> Vendor
+          <div style={{ display: "flex", alignItems: "center", gap: "2rem", flexWrap: "wrap" }}>
+            <Link href="/vendor/dashboard" style={{ textDecoration: "none" }}>
+              <CompanyBrandHeader companyName={user?.activeCompanyName} portalTitle="Vendor" />
             </Link>
 
             <nav style={{ display: "flex", gap: "1.25rem" }}>
-              <Link href="/vendor/dashboard" style={{
-                fontSize: "0.9rem",
-                fontWeight: 500,
-                color: "hsl(var(--foreground-hsl))"
-              }}>
+              <Link
+                href="/vendor/dashboard"
+                className={`vendor-nav-link${isLinkActive("/vendor/dashboard") ? " active" : ""}`}
+                style={{
+                  fontSize: "0.9rem",
+                  fontWeight: isLinkActive("/vendor/dashboard") ? 700 : 500,
+                  color: isLinkActive("/vendor/dashboard") ? "hsl(var(--primary-hsl))" : "hsl(var(--foreground-hsl))"
+                }}
+              >
                 Dashboard
               </Link>
-              <Link href="/vendor/job-roles" style={{
-                fontSize: "0.9rem",
-                fontWeight: 500,
-                color: "hsl(var(--foreground-hsl))"
-              }}>
+              <Link
+                href="/vendor/job-roles"
+                className={`vendor-nav-link${isLinkActive("/vendor/job-roles") ? " active" : ""}`}
+                style={{
+                  fontSize: "0.9rem",
+                  fontWeight: isLinkActive("/vendor/job-roles") ? 700 : 500,
+                  color: isLinkActive("/vendor/job-roles") ? "hsl(var(--primary-hsl))" : "hsl(var(--foreground-hsl))"
+                }}
+              >
                 Active Job Roles
               </Link>
-              <Link href="/vendor/profile" style={{
-                fontSize: "0.9rem",
-                fontWeight: 500,
-                color: "hsl(var(--foreground-hsl))"
-              }}>
+              <Link
+                href="/vendor/profile"
+                className={`vendor-nav-link${isLinkActive("/vendor/profile") ? " active" : ""}`}
+                style={{
+                  fontSize: "0.9rem",
+                  fontWeight: isLinkActive("/vendor/profile") ? 700 : 500,
+                  color: isLinkActive("/vendor/profile") ? "hsl(var(--primary-hsl))" : "hsl(var(--foreground-hsl))"
+                }}
+              >
                 Profile
               </Link>
             </nav>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: "1.25rem" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "32px",
+                height: "32px",
+                borderRadius: "50%",
+                backgroundColor: "hsl(var(--primary-hsl))",
+                color: "hsl(var(--primary-foreground-hsl))",
+                fontSize: "0.8rem",
+                fontWeight: 700,
+                flexShrink: 0,
+                userSelect: "none"
+              }}
+              aria-hidden="true"
+            >
+              {avatarInitial}
+            </div>
             <span style={{ fontSize: "0.875rem", color: "hsl(var(--muted-hsl))" }}>
               Logged in as: <strong style={{ color: "hsl(var(--foreground-hsl))" }}>{user.name}</strong>
             </span>

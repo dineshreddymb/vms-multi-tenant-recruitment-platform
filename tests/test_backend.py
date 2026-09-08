@@ -41,9 +41,30 @@ def override_database_dependency(db_session: Session):
 def client():
     return TestClient(app)
 
-# ----------------- HELPERS -----------------
 def get_recruiter_auth_header(client, email, password):
-    resp = client.post("/api/v1/auth/recruiter/login", json={"email": email, "password": password})
+    from db.models import InternalUser, RecruiterCompanyAccess, Vendor
+    from db.connection import SessionLocal
+    db = SessionLocal()
+    iosys_id = None
+    try:
+        user = db.query(InternalUser).filter(InternalUser.email == email).first()
+        if user:
+            acc = db.query(RecruiterCompanyAccess).filter(RecruiterCompanyAccess.recruiter_id == user.id).first()
+            if not acc:
+                iosys = db.query(Vendor).filter(Vendor.normalized_name == "iosys", Vendor.is_tenant == True).first()
+                if iosys:
+                    db.add(RecruiterCompanyAccess(recruiter_id=user.id, company_id=iosys.id, status="APPROVED"))
+                    db.commit()
+            iosys = db.query(Vendor).filter(Vendor.normalized_name == "iosys", Vendor.is_tenant == True).first()
+            if iosys:
+                iosys_id = str(iosys.id)
+    finally:
+        db.close()
+
+    payload = {"email": email, "password": password}
+    if iosys_id:
+        payload["company_id"] = iosys_id
+    resp = client.post("/api/v1/auth/recruiter/login", json=payload)
     assert resp.status_code == 200
     token = resp.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
@@ -629,8 +650,10 @@ def test_candidate_status_terminal_states(client: TestClient, db_session: Sessio
     db_session.flush()
 
     dept = db_session.query(Department).filter(Department.status == "ACTIVE").first()
+    iosys = db_session.query(Vendor).filter(Vendor.normalized_name == "iosys", Vendor.is_tenant == True).first()
+    client_vendor_id = iosys.id if iosys else vendor.id
     stat_job_id = f"JOB-STAT-{uuid.uuid4().hex[:6]}"
-    role = JobRole(department_id=dept.id, vendor_id=vendor.id, title=f"Stat Role {uuid.uuid4().hex[:4]}", job_id=stat_job_id, status="ACTIVE")
+    role = JobRole(department_id=dept.id, vendor_id=client_vendor_id, title=f"Stat Role {uuid.uuid4().hex[:4]}", job_id=stat_job_id, status="ACTIVE")
     db_session.add(role)
     db_session.flush()
 
@@ -645,7 +668,7 @@ def test_candidate_status_terminal_states(client: TestClient, db_session: Sessio
     db_session.flush()
 
     sub = Submission(
-        candidate_id=candidate.id, submission_reference="SUB-20260519-9999", vendor_id=vendor.id, vendor_user_id=v_user.id,
+        candidate_id=candidate.id, submission_reference="SUB-20260519-9999", vendor_id=client_vendor_id, vendor_user_id=v_user.id,
         role_id=role.id, job_id=role.job_id, status="SUBMITTED", employment_mode="Perm"
     )
     db_session.add(sub)
@@ -738,7 +761,7 @@ def test_resume_processing_worker_end_to_end(client: TestClient, db_session: Ses
     finally:
         worker.SessionLocal = old_session_local
 
-    # 3. Retrieve resume status and verify state mutations
+    # 3. Retrieve resume status and verify state mutations and extracted_data payload
     resp = client.get(f"/api/v1/resumes/{resume_id}/status", headers=headers)
     assert resp.status_code == 200
     data = resp.json()
@@ -747,6 +770,11 @@ def test_resume_processing_worker_end_to_end(client: TestClient, db_session: Ses
     assert data["malware_scan_state"] == "CLEAN"
     assert data["processing_state"] == "COMPLETED"
     assert data["eligibility_state"] == "ELIGIBLE"
+    assert data["extracted_data"] is not None
+    assert data["extracted_data"]["name"] == "John Doe"
+    assert data["extracted_data"]["email"] == "john.doe@example.com"
+    assert data["extracted_data"]["contact_number"] == "+919999999999"
+    assert data["extracted_data"]["experience"] == 5.5
 
     # Verify extraction record exists
     extraction = db_session.query(ResumeExtraction).filter(
@@ -754,6 +782,7 @@ def test_resume_processing_worker_end_to_end(client: TestClient, db_session: Ses
     ).first()
     assert extraction is not None
     assert extraction.parser_version == "1.0"
+    assert extraction.extracted_data["email"] == "john.doe@example.com"
 
 
 def test_admin_vendor_user_provisioning(client: TestClient, db_session: Session):

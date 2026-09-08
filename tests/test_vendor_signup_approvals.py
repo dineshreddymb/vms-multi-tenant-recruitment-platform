@@ -63,7 +63,7 @@ def setup_test_actors(db: Session):
         existing_vuser.status = "ACTIVE"
         existing_vuser.password_hash = hash_password("ExistingVendorPass123!")
 
-    from db.models import VendorUserMembership
+    from db.models import VendorUserMembership, RecruiterCompanyAccess
     mem = db.query(VendorUserMembership).filter(
         VendorUserMembership.vendor_user_id == existing_vuser.id,
         VendorUserMembership.vendor_id == vendor.id
@@ -73,6 +73,16 @@ def setup_test_actors(db: Session):
         db.add(mem)
     else:
         mem.status = "ACTIVE"
+
+    iosys = db.query(Vendor).filter(Vendor.normalized_name == "iosys", Vendor.is_tenant == True).first()
+    if iosys:
+        for u in [admin, std_recruiter]:
+            acc = db.query(RecruiterCompanyAccess).filter(
+                RecruiterCompanyAccess.recruiter_id == u.id,
+                RecruiterCompanyAccess.company_id == iosys.id
+            ).first()
+            if not acc:
+                db.add(RecruiterCompanyAccess(recruiter_id=u.id, company_id=iosys.id, status="APPROVED"))
 
     db.commit()
     return admin, std_recruiter, vendor, existing_vuser
@@ -91,7 +101,7 @@ def get_token_for(client: TestClient, email: str, password: str, role: str = "re
 
 def test_vendor_signup_creates_pending_request_and_not_active_user(client: TestClient, db_session: Session):
     setup_test_actors(db_session)
-    
+
     unique_email = f"new_vendor_{uuid.uuid4().hex[:6]}@vms.com"
     payload = {
         "company_name": "Apex Staffing Solutions",
@@ -133,7 +143,7 @@ def test_multiple_users_signup_for_same_company_succeeds(client: TestClient, db_
     admin_token = get_token_for(client, admin.email, "AdminPass123!", "recruiter")
 
     company_name = f"Intellect_{uuid.uuid4().hex[:4]}"
-    
+
     user1_email = f"ravi_{uuid.uuid4().hex[:4]}@gmail.com"
     user2_email = f"priya_{uuid.uuid4().hex[:4]}@yahoo.com"
     user3_email = f"anil_{uuid.uuid4().hex[:4]}@outlook.com"
@@ -184,6 +194,7 @@ def test_multiple_users_signup_for_same_company_succeeds(client: TestClient, db_
         json={},
         headers={"Authorization": f"Bearer {admin_token}"}
     )
+    print("APP1 STATUS:", app1.status_code, "RESPONSE:", app1.text)
     assert app1.status_code == 200
 
     # 5. Admin Approves User 2 (Priya)
@@ -248,7 +259,7 @@ def test_vendor_signup_duplicate_email_rejected(client: TestClient, db_session: 
 
 def test_vendor_signup_duplicate_pending_request_rejected(client: TestClient, db_session: Session):
     setup_test_actors(db_session)
-    
+
     unique_email = f"pending_dup_{uuid.uuid4().hex[:6]}@vms.com"
     payload = {
         "company_name": "Pending Dup Co",
@@ -469,3 +480,122 @@ def test_non_existent_vendor_login_behavior(client: TestClient, db_session: Sess
     })
     assert resp.status_code == 401
     assert resp.json()["detail"] == "No vendor account found. Please create an account first."
+
+
+def test_multi_company_approval_rejection_isolation(client: TestClient, db_session: Session):
+    # 1. Resolve IOSYS and Volantis
+    iosys = db_session.query(Vendor).filter(Vendor.normalized_name == "iosys").one()
+    volantis = db_session.query(Vendor).filter(Vendor.normalized_name == "volantis").one()
+
+    # Create admin company accesses for seeded admin
+    admin = db_session.query(InternalUser).filter(InternalUser.email == "admin_approver@vms.com").first()
+    if not admin:
+        admin = InternalUser(
+            email="admin_approver@vms.com",
+            password_hash=hash_password("AdminPass123!"),
+            name="Admin Approver",
+            mobile="+919876543201",
+            role="RECRUITER",
+            access_level="ADMIN",
+            status="ACTIVE"
+        )
+        db_session.add(admin)
+        db_session.flush()
+
+    from db.models import RecruiterCompanyAccess
+    for comp in [iosys, volantis]:
+        exists = db_session.query(RecruiterCompanyAccess).filter(
+            RecruiterCompanyAccess.recruiter_id == admin.id,
+            RecruiterCompanyAccess.company_id == comp.id
+        ).first()
+        if not exists:
+            db_session.add(RecruiterCompanyAccess(recruiter_id=admin.id, company_id=comp.id))
+    db_session.commit()
+
+    # 2. Signup vendor
+    email = "siddu_test_mc@gmail.com"
+    signup_resp = client.post("/api/v1/auth/vendor/signup", json={
+        "companies": [str(iosys.id), str(volantis.id)],
+        "company_name": "Test ABC Agency",
+        "user_name": "siddu_mc",
+        "email": email,
+        "mobile": "+919876543213",
+        "password": "Password123!",
+        "confirm_password": "Password123!"
+    })
+    assert signup_resp.status_code == 201
+    req_id = signup_resp.json()["request_id"]
+
+    # Assert exactly 1 signup request created
+    req_count = db_session.query(VendorSignupRequest).filter(VendorSignupRequest.email == email).count()
+    assert req_count == 1
+
+    # 3. Login as IOSYS admin
+    login_iosys = client.post("/api/v1/auth/recruiter/login", json={
+        "email": "admin_approver@vms.com",
+        "password": "AdminPass123!",
+        "company_id": str(iosys.id)
+    })
+    assert login_iosys.status_code == 200
+    headers_iosys = {"Authorization": f"Bearer {login_iosys.json()['access_token']}"}
+
+    # Verify visible in IOSYS pending list
+    list_iosys = client.get("/api/v1/recruiter/vendor-signup-requests?status=PENDING", headers=headers_iosys)
+    assert list_iosys.status_code == 200
+    assert any(x["id"] == req_id for x in list_iosys.json())
+
+    # Approve from IOSYS
+    app_resp = client.post(f"/api/v1/recruiter/vendor-signup-requests/{req_id}/approve", headers=headers_iosys)
+    assert app_resp.status_code == 200
+
+    # Verify disappears from IOSYS pending list
+    list_iosys_after = client.get("/api/v1/recruiter/vendor-signup-requests?status=PENDING", headers=headers_iosys)
+    assert not any(x["id"] == req_id for x in list_iosys_after.json())
+
+    # Verify visible in IOSYS approved list
+    list_iosys_app = client.get("/api/v1/recruiter/vendor-signup-requests?status=APPROVED", headers=headers_iosys)
+    assert any(x["id"] == req_id for x in list_iosys_app.json())
+
+    # 4. Login as Volantis admin
+    login_vol = client.post("/api/v1/auth/recruiter/login", json={
+        "email": "admin_approver@vms.com",
+        "password": "AdminPass123!",
+        "company_id": str(volantis.id)
+    })
+    assert login_vol.status_code == 200
+    headers_vol = {"Authorization": f"Bearer {login_vol.json()['access_token']}"}
+
+    # Verify STILL visible in Volantis pending list
+    list_vol = client.get("/api/v1/recruiter/vendor-signup-requests?status=PENDING", headers=headers_vol)
+    assert any(x["id"] == req_id for x in list_vol.json())
+
+    # Reject from Volantis
+    rej_resp = client.post(f"/api/v1/recruiter/vendor-signup-requests/{req_id}/reject", json={"reason": "Not matching"}, headers=headers_vol)
+    assert rej_resp.status_code == 200
+
+    # Verify disappears from Volantis pending list
+    list_vol_after = client.get("/api/v1/recruiter/vendor-signup-requests?status=PENDING", headers=headers_vol)
+    assert not any(x["id"] == req_id for x in list_vol_after.json())
+
+    # Verify visible in Volantis rejected list
+    list_vol_rej = client.get("/api/v1/recruiter/vendor-signup-requests?status=REJECTED", headers=headers_vol)
+    assert any(x["id"] == req_id for x in list_vol_rej.json())
+
+    # Verify IOSYS remains approved
+    list_iosys_final = client.get("/api/v1/recruiter/vendor-signup-requests?status=APPROVED", headers=headers_iosys)
+    assert any(x["id"] == req_id for x in list_iosys_final.json())
+
+    # 5. Database check
+    db_session.expire_all()
+    user_abc = db_session.query(VendorUser).filter(VendorUser.email == email).one()
+    # vendor_id remains the agency (is_tenant=False)
+    agency_v = db_session.query(Vendor).filter(Vendor.id == user_abc.vendor_id).one()
+    assert agency_v.is_tenant is False
+    assert agency_v.name == "Test ABC Agency"
+
+    # Only approved memberships created (IOSYS approved, Volantis none)
+    from db.models import VendorUserMembership
+    mems = db_session.query(VendorUserMembership).filter(VendorUserMembership.vendor_user_id == user_abc.id).all()
+    assert len(mems) == 1
+    assert mems[0].vendor_id == iosys.id
+    assert mems[0].status == "APPROVED"

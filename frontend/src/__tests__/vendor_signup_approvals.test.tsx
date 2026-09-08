@@ -35,6 +35,15 @@ describe("Vendor User Signup & Approvals Workflow", () => {
     jest.clearAllMocks();
     window.alert = jest.fn();
     window.confirm = jest.fn(() => true);
+    (api.get as jest.Mock).mockImplementation((url: string) => {
+      if (url.includes("/api/v1/auth/companies")) {
+        return Promise.resolve([
+          { id: "c1", name: "IOSYS" },
+          { id: "c2", name: "Volantis" }
+        ]);
+      }
+      return Promise.resolve([]);
+    });
   });
 
   describe("Vendor Login Page", () => {
@@ -54,13 +63,15 @@ describe("Vendor User Signup & Approvals Workflow", () => {
   });
 
   describe("Vendor Signup Page", () => {
-    it("renders all required input fields", () => {
+    it("renders all required input fields", async () => {
       render(<VendorSignup />);
 
-      expect(screen.getByRole("heading", { name: "Vendor Signup" })).toBeInTheDocument();
-      expect(screen.queryByText(/Select Vendor Companies/i)).not.toBeInTheDocument();
-      expect(screen.queryByLabelText("IOSYS")).not.toBeInTheDocument();
-      expect(screen.queryByLabelText("Volantis")).not.toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.getByRole("heading", { name: "Vendor Signup" })).toBeInTheDocument();
+        expect(screen.getByText(/Select Organizations \/ Clients You Work With/i)).toBeInTheDocument();
+        expect(screen.getByText("IOSYS")).toBeInTheDocument();
+        expect(screen.getByText("Volantis")).toBeInTheDocument();
+      });
       expect(screen.getByLabelText(/Full Name/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/Vendor Company Name/i)).toBeInTheDocument();
       expect(screen.getByLabelText(/Email Address/i)).toBeInTheDocument();

@@ -34,6 +34,7 @@ export default function VendorUsersManagement() {
   // Provisioning form states
   const [isProvisionOpen, setIsProvisionOpen] = useState(false);
   const [selectedCompanies, setSelectedCompanies] = useState<string[]>(["IOSYS"]);
+  const [companyName, setCompanyName] = useState("");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [mobile, setMobile] = useState("");
@@ -43,6 +44,7 @@ export default function VendorUsersManagement() {
 
   const resetForm = () => {
     setSelectedCompanies(["IOSYS"]);
+    setCompanyName("");
     setName("");
     setEmail("");
     setMobile("");
@@ -61,13 +63,14 @@ export default function VendorUsersManagement() {
   const handleProvision = async (e: React.FormEvent) => {
     e.preventDefault();
     if (selectedCompanies.length === 0) {
-      setProvisionError("Please select at least one vendor company.");
+      setProvisionError("Please select at least one company to authorize.");
       return;
     }
     setProvisionLoading(true);
     setProvisionError("");
     try {
       await api.post<VendorUser>("/api/v1/recruiter/vendor-users", {
+        company_name: companyName.trim() || undefined,
         companies: selectedCompanies,
         name,
         email,
@@ -266,7 +269,7 @@ export default function VendorUsersManagement() {
                               </span>
                               <span style={getStatusBadgeStyle(m.status)}>{m.status}</span>
                               {isAdmin && (
-                                m.status === "ACTIVE" ? (
+                                (m.status === "ACTIVE" || m.status === "APPROVED") ? (
                                   <button
                                     onClick={() => handleDisableMembership(u.id, m.vendor_id, m.company_name)}
                                     style={{
@@ -337,6 +340,15 @@ export default function VendorUsersManagement() {
               {provisionError}
             </div>
           )}
+          <Input
+            label="Vendor Agency Name"
+            type="text"
+            placeholder="e.g. ABC Staffing"
+            value={companyName}
+            onChange={(e) => setCompanyName(e.target.value)}
+            maxLength={100}
+          />
+
           <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
             <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>
               Select Vendor Companies <span style={{ color: "hsl(var(--danger-hsl))" }}>*</span>
@@ -380,12 +392,12 @@ export default function VendorUsersManagement() {
             placeholder="e.g. representative@company.com"
           />
           <Input
-            label="Mobile Number"
+            label="Mobile Number (with country code)"
             type="tel"
             value={mobile}
             onChange={(e) => setMobile(e.target.value)}
             required
-            placeholder="e.g. 9876543210"
+            placeholder="+91 9988776655"
           />
           <Input
             label="Password"

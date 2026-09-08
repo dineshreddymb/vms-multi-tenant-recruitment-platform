@@ -140,22 +140,22 @@ describe("Recruiter AI Job Description Flow", () => {
     const viewBtn = screen.getByRole("button", { name: "View JD" });
     fireEvent.click(viewBtn);
 
-    expect(screen.getByText("Job Description Preview")).toBeInTheDocument();
-    expect(screen.getByText("AI Generated Python Job Description Text content")).toBeInTheDocument();
+    expect(screen.getByText("AI Generated Job Description")).toBeInTheDocument();
+    expect(screen.getByDisplayValue("AI Generated Python Job Description Text content")).toBeInTheDocument();
 
     // Close preview
-    const closeBtn = screen.getByRole("button", { name: "Close" });
-    fireEvent.click(closeBtn);
+    const cancelBtns = screen.getAllByRole("button", { name: "Cancel" });
+    fireEvent.click(cancelBtns[cancelBtns.length - 1]);
 
-    expect(screen.queryByText("Job Description Preview")).not.toBeInTheDocument();
+    expect(screen.queryByText("AI Generated Job Description")).not.toBeInTheDocument();
 
     // Click Proceed
     const proceedBtn = screen.getByRole("button", { name: "Proceed" });
     fireEvent.click(proceedBtn);
 
-    // Verify it assigns generated_jd.txt to standard file field
+    // Verify it assigns generated_jd.pdf to status
     expect(screen.getByText(/Selected:/i)).toBeInTheDocument();
-    expect(screen.getByText(/generated_jd\.txt/i)).toBeInTheDocument();
+    expect(screen.getByText(/generated_jd\.pdf/i)).toBeInTheDocument();
   });
 
   test("Manual JD replacement confirmation warning is shown when Proceed is clicked", async () => {
@@ -199,8 +199,8 @@ describe("Recruiter AI Job Description Flow", () => {
       "A JD file is already selected. Do you want to replace it with the AI-generated JD?"
     );
 
-    // File should now be replaced by generated_jd.txt
-    expect(screen.getByText(/generated_jd\.txt/i)).toBeInTheDocument();
+    // File should now be replaced by generated_jd.pdf
+    expect(screen.getByText(/generated_jd\.pdf/i)).toBeInTheDocument();
     expect(screen.queryByText(/manual_jd\.pdf/i)).not.toBeInTheDocument();
   });
 });

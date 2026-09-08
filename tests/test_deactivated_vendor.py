@@ -57,6 +57,16 @@ def setup_deactivation_fixtures(db: Session):
         db.add(v_user_disabled)
         db.flush()
 
+    from db.models import RecruiterCompanyAccess
+    iosys = db.query(Vendor).filter(Vendor.normalized_name == "iosys", Vendor.is_tenant == True).first()
+    if iosys:
+        acc = db.query(RecruiterCompanyAccess).filter(
+            RecruiterCompanyAccess.recruiter_id == recruiter.id,
+            RecruiterCompanyAccess.company_id == iosys.id
+        ).first()
+        if not acc:
+            db.add(RecruiterCompanyAccess(recruiter_id=recruiter.id, company_id=iosys.id, status="APPROVED"))
+
     db.commit()
     return recruiter, vendor, v_user_active, v_user_disabled
 

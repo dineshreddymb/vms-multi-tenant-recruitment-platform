@@ -73,7 +73,7 @@ export default function RecruiterProfile() {
       api.get<RecruiterUser[]>("/api/v1/recruiter/users")
         .then(data => setRecruiterUsers(data))
         .catch(err => console.error("Failed to load recruiter users", err));
-      api.get<{ id: string; name: string }[]>("/api/v1/auth/companies")
+      api.get<{ id: string; name: string }[]>("/api/v1/auth/companies?is_tenant=true")
         .then(data => setCompaniesList(data))
         .catch(err => console.error("Failed to load companies list", err));
     }
@@ -105,13 +105,7 @@ export default function RecruiterProfile() {
     setAccessSuccess("");
     setAccessError("");
 
-    // Hard restriction: Admins can only be mapped to IOSYS and Volantis
-    const payloadCompanies = isSelectedAdmin
-      ? selectedCompanies.filter(cid => {
-          const comp = companiesList.find(c => c.id === cid);
-          return comp?.name === "IOSYS" || comp?.name === "Volantis";
-        })
-      : selectedCompanies;
+    const payloadCompanies = selectedCompanies;
 
     try {
       await api.post(`/api/v1/recruiter/users/${selectedRecruiterId}/companies`, payloadCompanies);
@@ -399,19 +393,17 @@ export default function RecruiterProfile() {
                         <Skeleton height="30px" />
                       ) : (
                         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-                          {companiesList
-                            .filter(c => !isSelectedAdmin || c.name === "IOSYS" || c.name === "Volantis")
-                            .map(c => (
-                              <label key={c.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.85rem" }}>
-                                <input
-                                  type="checkbox"
-                                  checked={selectedCompanies.includes(c.id)}
-                                  onChange={(e) => handleAccessCompanyToggle(c.id, e.target.checked)}
-                                  style={{ width: "16px", height: "16px", cursor: "pointer", accentColor: "hsl(var(--primary-hsl))" }}
-                                />
-                                <span>{c.name}</span>
-                              </label>
-                            ))}
+                          {companiesList.map(c => (
+                            <label key={c.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.85rem" }}>
+                              <input
+                                type="checkbox"
+                                checked={selectedCompanies.includes(c.id)}
+                                onChange={(e) => handleAccessCompanyToggle(c.id, e.target.checked)}
+                                style={{ width: "16px", height: "16px", cursor: "pointer", accentColor: "hsl(var(--primary-hsl))" }}
+                              />
+                              <span>{c.name}</span>
+                            </label>
+                          ))}
                         </div>
                       )}
                     </div>

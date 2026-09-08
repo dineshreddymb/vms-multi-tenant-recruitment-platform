@@ -339,18 +339,22 @@ export default function ApprovalsQueue() {
                       <td style={{ padding: "1rem 1.5rem" }}>
                         <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
                           <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
-                            {(req.requested_companies || [req.company_name]).map((c) => (
-                              <span key={c} style={{
-                                padding: "0.2rem 0.5rem",
-                                borderRadius: "4px",
-                                backgroundColor: "rgba(37, 99, 235, 0.1)",
-                                color: "hsl(var(--primary-hsl))",
-                                fontWeight: 600,
-                                fontSize: "0.8rem"
-                              }}>
-                                {c}
-                              </span>
-                            ))}
+                            {((req.requested_companies && req.requested_companies.length > 0) ? req.requested_companies : [req.company_name]).map((c) => {
+                              const comp = companiesList.find(company => company.id === c);
+                              const displayName = comp ? comp.name : (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(c) ? "Unknown" : c);
+                              return (
+                                <span key={c} style={{
+                                  padding: "0.2rem 0.5rem",
+                                  borderRadius: "4px",
+                                  backgroundColor: "rgba(37, 99, 235, 0.1)",
+                                  color: "hsl(var(--primary-hsl))",
+                                  fontWeight: 600,
+                                  fontSize: "0.8rem"
+                                }}>
+                                  {displayName}
+                                </span>
+                              );
+                            })}
                           </div>
                           {req.existing_companies && req.existing_companies.length > 0 && (
                             <span style={{ fontSize: "0.75rem", color: "hsl(var(--muted-hsl))" }}>

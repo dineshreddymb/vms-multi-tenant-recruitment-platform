@@ -9,7 +9,8 @@ from db.models import (
     Vendor,
     VendorUser,
     Department,
-    JobRole
+    JobRole,
+    RecruiterCompanyAccess
 )
 from backend.auth import hash_password
 
@@ -61,6 +62,13 @@ def create_test_setup(db: Session):
         )
         db.add(user)
         db.flush()
+
+    acc = db.query(RecruiterCompanyAccess).filter(
+        RecruiterCompanyAccess.recruiter_id == recruiter.id,
+        RecruiterCompanyAccess.company_id == vendor.id
+    ).first()
+    if not acc:
+        db.add(RecruiterCompanyAccess(recruiter_id=recruiter.id, company_id=vendor.id, status="APPROVED"))
 
     db.commit()
     return dept, recruiter, vendor, user

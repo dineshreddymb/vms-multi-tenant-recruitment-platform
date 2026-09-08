@@ -68,16 +68,17 @@ class EmailService:
             msg["Subject"] = subject
             msg.attach(MIMEText(body, "plain"))
             
-            server = smtplib.SMTP(SMTP_HOST, SMTP_PORT)
-            if SMTP_USE_TLS:
-                server.starttls()
-            if SMTP_USERNAME and SMTP_PASSWORD:
-                server.login(SMTP_USERNAME, SMTP_PASSWORD)
-            server.send_message(msg)
-            server.quit()
+            with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=15) as server:
+                if SMTP_USE_TLS or SMTP_PORT == 587:
+                    server.ehlo()
+                    server.starttls()
+                    server.ehlo()
+                if SMTP_USERNAME and SMTP_PASSWORD:
+                    server.login(SMTP_USERNAME, SMTP_PASSWORD)
+                server.send_message(msg)
             logger.info("Successfully sent password reset email via SMTP.")
         except Exception as e:
             # Secure logging: do not expose raw token, credentials, or stack traces
-            logger.error("Failed to send password reset SMTP email.")
+            logger.error("Failed to send password reset SMTP email: %s", type(e).__name__)
             
         return reset_link

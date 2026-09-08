@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/Input";
 import { Select } from "@/components/ui/Select";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/context/AuthContext";
+import { CompanyBadge } from "@/components/CompanyBranding";
 
 interface Department {
   id: string;
@@ -33,7 +34,7 @@ const reqLabel = (text: string) => (
 export default function SubmitCandidate() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, setActiveVendorId } = useAuth();
+  const { user } = useAuth();
 
   // Pre-selected job context (when navigated from job-roles page)
   interface PreselectedJob {
@@ -120,9 +121,10 @@ export default function SubmitCandidate() {
         setSelectedDeptId(dept_id);
         setSelectedRoleId(role_id);
         setJobId(job_id);
-        if (vendor_id && user?.activeVendorId !== vendor_id) {
-          setActiveVendorId(vendor_id);
-        }
+        // NOTE: setActiveVendorId is intentionally NOT called here.
+        // The vendor's active company is locked to the JWT session company and cannot be
+        // changed by navigating to a job role of another company. If the job role does not
+        // belong to the session company, the backend will reject the submission.
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -267,7 +269,18 @@ export default function SubmitCandidate() {
 
     const checkStatus = async () => {
       try {
-        const res = await api.get<{ malware_scan_state: string; processing_state: string; eligibility_state: string }>(`/api/v1/resumes/${id}/status`);
+        const res = await api.get<{
+          malware_scan_state: string;
+          processing_state: string;
+          eligibility_state: string;
+          extracted_data?: {
+            name?: string;
+            email?: string;
+            contact_number?: string;
+            experience?: number | string;
+            skills?: string[];
+          } | null;
+        }>(`/api/v1/resumes/${id}/status`);
         
         if (res?.malware_scan_state === "INFECTED") {
           setScanStatus("INFECTED");
@@ -280,6 +293,30 @@ export default function SubmitCandidate() {
         } else if (res?.eligibility_state === "ELIGIBLE") {
           setScanStatus("ELIGIBLE");
           if (intervalId) clearInterval(intervalId);
+
+          // Auto-populate extracted candidate fields if not already manually entered by user
+          if (res.extracted_data) {
+            const data = res.extracted_data;
+            if (data.name && typeof data.name === "string" && data.name.trim()) {
+              setName(prev => prev.trim() ? prev : data.name!.trim());
+            }
+            if (data.email && typeof data.email === "string" && data.email.trim()) {
+              setEmail(prev => prev.trim() ? prev : data.email!.trim());
+            }
+            if (data.contact_number && typeof data.contact_number === "string" && data.contact_number.trim()) {
+              setContactNumber(prev => prev.trim() ? prev : data.contact_number!.trim());
+            }
+            if (data.experience !== undefined && data.experience !== null && data.experience !== "") {
+              const expStr = data.experience.toString().trim();
+              if (expStr && !isNaN(Number(expStr)) && Number(expStr) > 0) {
+                setTotalExperience(prev => prev.trim() ? prev : expStr);
+              }
+            }
+            if (data.skills && Array.isArray(data.skills) && data.skills.length > 0) {
+              const skillsSummary = `Key skills: ${data.skills.join(", ")}`;
+              setAbout(prev => prev.trim() ? prev : skillsSummary);
+            }
+          }
         }
       } catch (err) {
         const error = err as { detail?: string; status?: number };
@@ -441,9 +478,9 @@ export default function SubmitCandidate() {
 
         <div style={{
           padding: "0.75rem 1rem",
-          backgroundColor: "rgba(37, 99, 235, 0.05)",
+          backgroundColor: "hsl(var(--muted-bg-hsl))",
           borderRadius: "var(--radius-md)",
-          border: "1px solid rgba(37, 99, 235, 0.2)",
+          border: "1px solid hsl(var(--card-border-hsl))",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
@@ -454,31 +491,24 @@ export default function SubmitCandidate() {
             Submitting on behalf of company:
           </span>
           {preselectedJob ? (
-            <span style={{
-              padding: "0.4rem 0.75rem",
-              borderRadius: "4px",
-              border: "1px solid hsl(var(--card-border-hsl))",
-              backgroundColor: "hsl(var(--muted-bg-hsl))",
-              fontWeight: 700,
-              fontSize: "0.875rem",
-              color: "hsl(var(--foreground-hsl))",
-              cursor: "not-allowed"
-            }}>
-              {preselectedJob.company || user?.activeCompanyName}
-            </span>
+            <CompanyBadge companyName={preselectedJob.company || user?.activeCompanyName} />
           ) : (
-            <span style={{
-              padding: "0.4rem 0.75rem",
-              borderRadius: "4px",
-              border: "1px solid hsl(var(--card-border-hsl))",
-              backgroundColor: "hsl(var(--muted-bg-hsl))",
-              fontWeight: 700,
-              fontSize: "0.875rem",
-              color: "hsl(var(--foreground-hsl))",
-              cursor: "not-allowed"
-            }}>
-              {roles.find((r) => r.id === selectedRoleId)?.company_name || "Select Job Role First"}
-            </span>
+            (roles.find((r) => r.id === selectedRoleId)?.company_name || user?.activeCompanyName) ? (
+              <CompanyBadge companyName={roles.find((r) => r.id === selectedRoleId)?.company_name || user?.activeCompanyName} />
+            ) : (
+              <span style={{
+                padding: "0.4rem 0.75rem",
+                borderRadius: "4px",
+                border: "1px solid hsl(var(--card-border-hsl))",
+                backgroundColor: "hsl(var(--card-hsl))",
+                fontWeight: 600,
+                fontSize: "0.875rem",
+                color: "hsl(var(--muted-hsl))",
+                cursor: "not-allowed"
+              }}>
+                Select Job Role First
+              </span>
+            )
           )}
         </div>
 
@@ -624,8 +654,8 @@ export default function SubmitCandidate() {
             /* Flow B: Pre-selected from Job Roles page — render as locked read-only fields */
             <div style={{
               padding: "1rem 1.25rem",
-              backgroundColor: "rgba(37, 99, 235, 0.05)",
-              border: "1px solid rgba(37, 99, 235, 0.2)",
+              backgroundColor: "hsl(var(--muted-bg-hsl))",
+              border: "1px solid hsl(var(--card-border-hsl))",
               borderRadius: "var(--radius-md)",
               display: "flex",
               flexDirection: "column",

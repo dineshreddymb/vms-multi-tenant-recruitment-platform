@@ -5,11 +5,15 @@ import Link from "next/link";
 import { useAuth } from "@/context/AuthContext";
 import { Input } from "@/components/ui/Input";
 import { Button } from "@/components/ui/Button";
+import { Select } from "@/components/ui/Select";
 
 export default function VendorLogin() {
   const { login } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [companyId, setCompanyId] = useState("");
+  const [companies, setCompanies] = useState<{ id: string; name: string }[]>([]);
+  const [showCompanySelect, setShowCompanySelect] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -19,14 +23,24 @@ export default function VendorLogin() {
     setLoading(true);
 
     try {
-      await login(email, password, "vendor");
+      if (companyId) {
+        await login(email, password, "vendor", companyId);
+      } else {
+        await login(email, password, "vendor");
+      }
     } catch (err) {
-      const error = err as { detail?: string; status?: number };
+      const error = err as { detail?: string; status?: number; data?: any };
       if (error.status === 403 && typeof error.detail === "string" && error.detail.toLowerCase().includes("deactivated")) {
         // Handled by AuthContext redirection
         return;
       }
-      setError(error.detail || "Invalid email or password. Please check your credentials and try again.");
+      if (error.status === 409 && error.data?.requires_company_selection) {
+        setCompanies(error.data.companies || []);
+        setShowCompanySelect(true);
+        setError(""); // Clear previous credential error since they need to select company now
+      } else {
+        setError(error.detail || "Invalid email or password. Please check your credentials and try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -98,6 +112,20 @@ export default function VendorLogin() {
             required
             autoComplete="current-password"
           />
+
+          {showCompanySelect && (
+            <Select
+              label="Company"
+              value={companyId}
+              onChange={(e) => setCompanyId(e.target.value)}
+              options={(companies || []).map(company => ({
+                value: company.id,
+                label: company.name
+              }))}
+              placeholder="Select a company"
+              required
+            />
+          )}
 
           <div style={{ textAlign: "right", marginTop: "-0.5rem", marginBottom: "0.5rem" }}>
             <Link href="/auth/forgot-password" style={{ fontSize: "0.8rem", color: "hsl(var(--primary-hsl))", textDecoration: "none" }}>

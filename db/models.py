@@ -50,6 +50,14 @@ class InternalUser(Base):
     company_access = relationship("RecruiterCompanyAccess", back_populates="recruiter", cascade="all, delete-orphan")
 
 
+def get_default_company_id(context):
+    try:
+        from sqlalchemy import text
+        return context.connection.execute(text("SELECT id FROM vendors WHERE normalized_name = 'iosys'")).scalar()
+    except Exception:
+        return None
+
+
 class RecruiterSignupRequest(Base):
     __tablename__ = "recruiter_signup_requests"
 
@@ -62,6 +70,7 @@ class RecruiterSignupRequest(Base):
     rejection_reason = Column(String(255), nullable=True)
     reviewed_by = Column(UUID(as_uuid=True), ForeignKey("internal_users.id", ondelete="SET NULL"), nullable=True)
     created_user_id = Column(UUID(as_uuid=True), ForeignKey("internal_users.id", ondelete="SET NULL"), nullable=True)
+    company_id = Column(UUID(as_uuid=True), ForeignKey("vendors.id", ondelete="CASCADE"), nullable=False, default=get_default_company_id)
     requested_companies = Column(JSONB, nullable=True)
     requested_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     reviewed_at = Column(DateTime(timezone=True), nullable=True)
@@ -71,6 +80,8 @@ class RecruiterSignupRequest(Base):
     __table_args__ = (
         CheckConstraint("status IN ('PENDING', 'APPROVED', 'REJECTED')", name="chk_recruiter_signup_status"),
     )
+
+    company = relationship("Vendor")
 
 
 class Vendor(Base):
@@ -130,7 +141,7 @@ class VendorUserMembership(Base):
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
 
     __table_args__ = (
-        CheckConstraint("status IN ('ACTIVE', 'DISABLED')", name="chk_vendor_user_membership_status"),
+        CheckConstraint("status IN ('PENDING', 'APPROVED', 'REJECTED', 'ACTIVE', 'DISABLED')", name="chk_vendor_user_membership_status"),
         UniqueConstraint("vendor_user_id", "vendor_id", name="uq_vendor_user_membership"),
     )
 
@@ -145,9 +156,11 @@ class RecruiterCompanyAccess(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     recruiter_id = Column(UUID(as_uuid=True), ForeignKey("internal_users.id", ondelete="CASCADE"), nullable=False, index=True)
     company_id = Column(UUID(as_uuid=True), ForeignKey("vendors.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(String(50), nullable=False, default="APPROVED")
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     __table_args__ = (
+        CheckConstraint("status IN ('PENDING', 'APPROVED', 'REJECTED', 'ACTIVE', 'DISABLED')", name="chk_recruiter_company_access_status"),
         UniqueConstraint("recruiter_id", "company_id", name="uq_recruiter_company_access"),
     )
 
@@ -163,6 +176,7 @@ class VendorSignupRequest(Base):
     company_name = Column(String(255), nullable=False)
     normalized_company_name = Column(String(255), nullable=False, index=True)
     requested_companies = Column(JSONB, nullable=True)
+    company_status = Column(JSONB, nullable=True, server_default='{}')
     user_name = Column(String(255), nullable=False)
     email = Column(String(255), nullable=False, index=True)
     mobile = Column(String(50), nullable=False)

@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from db.models import (
     Vendor,
     VendorUser,
+    VendorUserMembership,
     Department,
     JobRole,
     Candidate,
@@ -16,8 +17,25 @@ from db.models import (
 from db.crypto import get_pan_fingerprint, normalize_pan
 from backend.auth import hash_password
 
-def get_vendor_auth_header(client: TestClient, email: str, password: str = "Password123!"):
-    resp = client.post("/api/v1/auth/vendor/login", json={"email": email, "password": password})
+def add_membership(db: Session, vendor_user_id: uuid.UUID, client_id: uuid.UUID):
+    mem = db.query(VendorUserMembership).filter(
+        VendorUserMembership.vendor_user_id == vendor_user_id,
+        VendorUserMembership.vendor_id == client_id
+    ).first()
+    if not mem:
+        mem = VendorUserMembership(
+            vendor_user_id=vendor_user_id,
+            vendor_id=client_id,
+            status="APPROVED"
+        )
+        db.add(mem)
+        db.commit()
+
+def get_vendor_auth_header(client: TestClient, email: str, company_id: uuid.UUID = None, password: str = "Password123!"):
+    body = {"email": email, "password": password}
+    if company_id:
+        body["company_id"] = str(company_id)
+    resp = client.post("/api/v1/auth/vendor/login", json=body)
     assert resp.status_code == 200
     return {"Authorization": f"Bearer {resp.json()['access_token']}"}
 
@@ -52,6 +70,10 @@ def get_or_create_agency_and_user(db: Session, name: str, email: str):
         )
         db.add(user)
         db.flush()
+
+    for t in db.query(Vendor).filter(Vendor.is_tenant == True).all():
+        add_membership(db, user.id, t.id)
+
     db.commit()
     return agency, user
 
@@ -125,7 +147,8 @@ def test_01_iosys_submission_does_not_block_volantis(client: TestClient, db_sess
     volantis = get_or_create_client_company(db_session, "Volantis")
     
     agency_a, user_a = get_or_create_agency_and_user(db_session, "Isolation Agency A", "iso_a@agency.com")
-    headers_a = get_vendor_auth_header(client, "iso_a@agency.com")
+    headers_iosys = get_vendor_auth_header(client, "iso_a@agency.com", iosys.id)
+    headers_vol = get_vendor_auth_header(client, "iso_a@agency.com", volantis.id)
     
     role_iosys = create_job_role(db_session, iosys, "IOSYS Aim", "JOB-ISO-IOSYS-1")
     role_vol = create_job_role(db_session, volantis, "Volantis Aim", "JOB-ISO-VOL-1")
@@ -135,15 +158,15 @@ def test_01_iosys_submission_does_not_block_volantis(client: TestClient, db_sess
     # Submit to IOSYS -> ALLOW (201)
     res_iosys = create_eligible_resume(db_session, iosys.id, user_a.id)
     payload_iosys = make_payload(role_iosys, res_iosys.id, pan, "iso1@test.com", "Iso One")
-    headers_a["Idempotency-Key"] = str(uuid.uuid4())
-    r1 = client.post("/api/v1/submissions", json=payload_iosys, headers=headers_a)
+    headers_iosys["Idempotency-Key"] = str(uuid.uuid4())
+    r1 = client.post("/api/v1/submissions", json=payload_iosys, headers=headers_iosys)
     assert r1.status_code == 201
     
     # Submit to Volantis -> ALLOW (201)
     res_vol = create_eligible_resume(db_session, volantis.id, user_a.id)
     payload_vol = make_payload(role_vol, res_vol.id, pan, "iso1@test.com", "Iso One")
-    headers_a["Idempotency-Key"] = str(uuid.uuid4())
-    r2 = client.post("/api/v1/submissions", json=payload_vol, headers=headers_a)
+    headers_vol["Idempotency-Key"] = str(uuid.uuid4())
+    r2 = client.post("/api/v1/submissions", json=payload_vol, headers=headers_vol)
     assert r2.status_code == 201
 
 def test_02_volantis_submission_does_not_block_iosys(client: TestClient, db_session: Session):
@@ -151,7 +174,8 @@ def test_02_volantis_submission_does_not_block_iosys(client: TestClient, db_sess
     volantis = get_or_create_client_company(db_session, "Volantis")
     
     agency_a, user_a = get_or_create_agency_and_user(db_session, "Isolation Agency A", "iso_a@agency.com")
-    headers_a = get_vendor_auth_header(client, "iso_a@agency.com")
+    headers_vol = get_vendor_auth_header(client, "iso_a@agency.com", volantis.id)
+    headers_iosys = get_vendor_auth_header(client, "iso_a@agency.com", iosys.id)
     
     role_iosys = create_job_role(db_session, iosys, "IOSYS Aim 2", "JOB-ISO-IOSYS-2")
     role_vol = create_job_role(db_session, volantis, "Volantis Aim 2", "JOB-ISO-VOL-2")
@@ -161,15 +185,15 @@ def test_02_volantis_submission_does_not_block_iosys(client: TestClient, db_sess
     # Submit to Volantis -> ALLOW (201)
     res_vol = create_eligible_resume(db_session, volantis.id, user_a.id)
     payload_vol = make_payload(role_vol, res_vol.id, pan, "iso2@test.com", "Iso Two")
-    headers_a["Idempotency-Key"] = str(uuid.uuid4())
-    r1 = client.post("/api/v1/submissions", json=payload_vol, headers=headers_a)
+    headers_vol["Idempotency-Key"] = str(uuid.uuid4())
+    r1 = client.post("/api/v1/submissions", json=payload_vol, headers=headers_vol)
     assert r1.status_code == 201
     
     # Submit to IOSYS -> ALLOW (201)
     res_iosys = create_eligible_resume(db_session, iosys.id, user_a.id)
     payload_iosys = make_payload(role_iosys, res_iosys.id, pan, "iso2@test.com", "Iso Two")
-    headers_a["Idempotency-Key"] = str(uuid.uuid4())
-    r2 = client.post("/api/v1/submissions", json=payload_iosys, headers=headers_a)
+    headers_iosys["Idempotency-Key"] = str(uuid.uuid4())
+    r2 = client.post("/api/v1/submissions", json=payload_iosys, headers=headers_iosys)
     assert r2.status_code == 201
 
 # ----------------- 3 & 4. SAME VENDOR SAME ROLE 90-DAY CALENDAR BOUNDARIES -----------------
@@ -177,7 +201,7 @@ def test_02_volantis_submission_does_not_block_iosys(client: TestClient, db_sess
 def test_03_iosys_same_vendor_same_role_boundaries(client: TestClient, db_session: Session):
     iosys = get_or_create_client_company(db_session, "IOSYS")
     agency_a, user_a = get_or_create_agency_and_user(db_session, "Isolation Agency A", "iso_a@agency.com")
-    headers_a = get_vendor_auth_header(client, "iso_a@agency.com")
+    headers_a = get_vendor_auth_header(client, "iso_a@agency.com", iosys.id)
     role = create_job_role(db_session, iosys, "IOSYS Role 3", "JOB-ISO-IOSYS-3")
     
     pan = "BOUND1234A"
@@ -218,7 +242,7 @@ def test_03_iosys_same_vendor_same_role_boundaries(client: TestClient, db_sessio
 def test_04_volantis_same_vendor_same_role_boundaries(client: TestClient, db_session: Session):
     volantis = get_or_create_client_company(db_session, "Volantis")
     agency_a, user_a = get_or_create_agency_and_user(db_session, "Isolation Agency A", "iso_a@agency.com")
-    headers_a = get_vendor_auth_header(client, "iso_a@agency.com")
+    headers_a = get_vendor_auth_header(client, "iso_a@agency.com", volantis.id)
     role = create_job_role(db_session, volantis, "Volantis Role 4", "JOB-ISO-VOL-4")
     
     pan = "BOUND1234B"
@@ -261,7 +285,7 @@ def test_04_volantis_same_vendor_same_role_boundaries(client: TestClient, db_ses
 def test_05_iosys_same_vendor_different_role(client: TestClient, db_session: Session):
     iosys = get_or_create_client_company(db_session, "IOSYS")
     agency_a, user_a = get_or_create_agency_and_user(db_session, "Isolation Agency A", "iso_a@agency.com")
-    headers_a = get_vendor_auth_header(client, "iso_a@agency.com")
+    headers_a = get_vendor_auth_header(client, "iso_a@agency.com", iosys.id)
     role_1 = create_job_role(db_session, iosys, "IOSYS Role 5a", "JOB-ISO-IOSYS-5A")
     role_2 = create_job_role(db_session, iosys, "IOSYS Role 5b", "JOB-ISO-IOSYS-5B")
     
@@ -282,7 +306,7 @@ def test_05_iosys_same_vendor_different_role(client: TestClient, db_session: Ses
 def test_06_volantis_same_vendor_different_role(client: TestClient, db_session: Session):
     volantis = get_or_create_client_company(db_session, "Volantis")
     agency_a, user_a = get_or_create_agency_and_user(db_session, "Isolation Agency A", "iso_a@agency.com")
-    headers_a = get_vendor_auth_header(client, "iso_a@agency.com")
+    headers_a = get_vendor_auth_header(client, "iso_a@agency.com", volantis.id)
     role_1 = create_job_role(db_session, volantis, "Volantis Role 6a", "JOB-ISO-VOL-6A")
     role_2 = create_job_role(db_session, volantis, "Volantis Role 6b", "JOB-ISO-VOL-6B")
     
@@ -307,8 +331,8 @@ def test_07_iosys_different_vendor_any_role(client: TestClient, db_session: Sess
     agency_a, user_a = get_or_create_agency_and_user(db_session, "Isolation Agency A", "iso_a@agency.com")
     agency_b, user_b = get_or_create_agency_and_user(db_session, "Isolation Agency B", "iso_b@agency.com")
     
-    headers_a = get_vendor_auth_header(client, "iso_a@agency.com")
-    headers_b = get_vendor_auth_header(client, "iso_b@agency.com")
+    headers_a = get_vendor_auth_header(client, "iso_a@agency.com", iosys.id)
+    headers_b = get_vendor_auth_header(client, "iso_b@agency.com", iosys.id)
     
     role_a = create_job_role(db_session, iosys, "IOSYS Role 7a", "JOB-ISO-IOSYS-7A")
     role_b = create_job_role(db_session, iosys, "IOSYS Role 7b", "JOB-ISO-IOSYS-7B")
@@ -352,8 +376,8 @@ def test_08_volantis_different_vendor_any_role(client: TestClient, db_session: S
     agency_a, user_a = get_or_create_agency_and_user(db_session, "Isolation Agency A", "iso_a@agency.com")
     agency_b, user_b = get_or_create_agency_and_user(db_session, "Isolation Agency B", "iso_b@agency.com")
     
-    headers_a = get_vendor_auth_header(client, "iso_a@agency.com")
-    headers_b = get_vendor_auth_header(client, "iso_b@agency.com")
+    headers_a = get_vendor_auth_header(client, "iso_a@agency.com", volantis.id)
+    headers_b = get_vendor_auth_header(client, "iso_b@agency.com", volantis.id)
     
     role_a = create_job_role(db_session, volantis, "Volantis Role 8a", "JOB-ISO-VOL-8A")
     role_b = create_job_role(db_session, volantis, "Volantis Role 8b", "JOB-ISO-VOL-8B")
@@ -399,7 +423,8 @@ def test_09_independent_timelines_and_windows(client: TestClient, db_session: Se
     volantis = get_or_create_client_company(db_session, "Volantis")
     
     agency_a, user_a = get_or_create_agency_and_user(db_session, "Isolation Agency A", "iso_a@agency.com")
-    headers_a = get_vendor_auth_header(client, "iso_a@agency.com")
+    headers_iosys = get_vendor_auth_header(client, "iso_a@agency.com", iosys.id)
+    headers_vol = get_vendor_auth_header(client, "iso_a@agency.com", volantis.id)
     
     role_iosys = create_job_role(db_session, iosys, "IOSYS Role 9", "JOB-ISO-IOSYS-9")
     role_vol = create_job_role(db_session, volantis, "Volantis Role 9", "JOB-ISO-VOL-9")
@@ -409,8 +434,8 @@ def test_09_independent_timelines_and_windows(client: TestClient, db_session: Se
     # 1. Day 0 (IOSYS): Vendor A submits PAN T to IOSYS -> ALLOW
     res_iosys = create_eligible_resume(db_session, iosys.id, user_a.id)
     payload_iosys = make_payload(role_iosys, res_iosys.id, pan, "ind@test.com", "Ind Cand")
-    headers_a["Idempotency-Key"] = str(uuid.uuid4())
-    assert client.post("/api/v1/submissions", json=payload_iosys, headers=headers_a).status_code == 201
+    headers_iosys["Idempotency-Key"] = str(uuid.uuid4())
+    assert client.post("/api/v1/submissions", json=payload_iosys, headers=headers_iosys).status_code == 201
     
     # Fetch candidate
     fp = get_pan_fingerprint(normalize_pan(pan))
@@ -426,8 +451,8 @@ def test_09_independent_timelines_and_windows(client: TestClient, db_session: Se
     # 2. Submit to Volantis now (starts Volantis's own Day 0 timeline) -> ALLOW
     res_vol = create_eligible_resume(db_session, volantis.id, user_a.id)
     payload_vol = make_payload(role_vol, res_vol.id, pan, "ind@test.com", "Ind Cand")
-    headers_a["Idempotency-Key"] = str(uuid.uuid4())
-    assert client.post("/api/v1/submissions", json=payload_vol, headers=headers_a).status_code == 201
+    headers_vol["Idempotency-Key"] = str(uuid.uuid4())
+    assert client.post("/api/v1/submissions", json=payload_vol, headers=headers_vol).status_code == 201
     
     # At this point:
     # - IOSYS submission is 10 days old.
@@ -450,14 +475,14 @@ def test_09_independent_timelines_and_windows(client: TestClient, db_session: Se
     # Resubmitting to IOSYS same-role should be ALLOWED (since Day 91+)
     res_iosys_new = create_eligible_resume(db_session, iosys.id, user_a.id)
     payload_iosys["resume_id"] = str(res_iosys_new.id)
-    headers_a["Idempotency-Key"] = str(uuid.uuid4())
-    assert client.post("/api/v1/submissions", json=payload_iosys, headers=headers_a).status_code == 201
+    headers_iosys["Idempotency-Key"] = str(uuid.uuid4())
+    assert client.post("/api/v1/submissions", json=payload_iosys, headers=headers_iosys).status_code == 201
     
     # Resubmitting to Volantis same-role should be BLOCKED (since Day 81 < 91)
     res_vol_new = create_eligible_resume(db_session, volantis.id, user_a.id)
     payload_vol["resume_id"] = str(res_vol_new.id)
-    headers_a["Idempotency-Key"] = str(uuid.uuid4())
-    assert client.post("/api/v1/submissions", json=payload_vol, headers=headers_a).status_code == 409
+    headers_vol["Idempotency-Key"] = str(uuid.uuid4())
+    assert client.post("/api/v1/submissions", json=payload_vol, headers=headers_vol).status_code == 409
 
 # ----------------- 10. SAME PAN ADVISORY ENDPOINT ISOLATION -----------------
 
@@ -466,7 +491,8 @@ def test_10_same_pan_checks_are_independent(client: TestClient, db_session: Sess
     volantis = get_or_create_client_company(db_session, "Volantis")
     
     agency_a, user_a = get_or_create_agency_and_user(db_session, "Isolation Agency A", "iso_a@agency.com")
-    headers_a = get_vendor_auth_header(client, "iso_a@agency.com")
+    headers_iosys = get_vendor_auth_header(client, "iso_a@agency.com", iosys.id)
+    headers_vol = get_vendor_auth_header(client, "iso_a@agency.com", volantis.id)
     
     role_iosys = create_job_role(db_session, iosys, "IOSYS Role 10", "JOB-ISO-IOSYS-10")
     role_vol = create_job_role(db_session, volantis, "Volantis Role 10", "JOB-ISO-VOL-10")
@@ -476,17 +502,17 @@ def test_10_same_pan_checks_are_independent(client: TestClient, db_session: Sess
     # Submit to IOSYS -> ALLOW (201)
     res_iosys = create_eligible_resume(db_session, iosys.id, user_a.id)
     payload_iosys = make_payload(role_iosys, res_iosys.id, pan, "adv@test.com", "Adv Cand")
-    headers_a["Idempotency-Key"] = str(uuid.uuid4())
-    assert client.post("/api/v1/submissions", json=payload_iosys, headers=headers_a).status_code == 201
+    headers_iosys["Idempotency-Key"] = str(uuid.uuid4())
+    assert client.post("/api/v1/submissions", json=payload_iosys, headers=headers_iosys).status_code == 201
     
     # Verify advisory endpoint check for IOSYS same role -> BLOCKED (can_submit=False)
-    resp_iosys = client.post("/api/v1/pan/check", json={"pan": pan, "role_id": str(role_iosys.id)}, headers=headers_a)
+    resp_iosys = client.post("/api/v1/pan/check", json={"pan": pan, "role_id": str(role_iosys.id)}, headers=headers_iosys)
     assert resp_iosys.status_code == 200
     assert resp_iosys.json()["can_submit"] is False
     assert resp_iosys.json()["status"] == "BLOCKED_SAME_VENDOR_SAME_ROLE_90_DAYS"
     
     # Verify advisory endpoint check for Volantis role -> ALLOWED (can_submit=True)
-    resp_vol = client.post("/api/v1/pan/check", json={"pan": pan, "role_id": str(role_vol.id)}, headers=headers_a)
+    resp_vol = client.post("/api/v1/pan/check", json={"pan": pan, "role_id": str(role_vol.id)}, headers=headers_vol)
     assert resp_vol.status_code == 200
     assert resp_vol.json()["can_submit"] is True
     assert resp_vol.json()["status"] == "ALLOWED"
@@ -498,7 +524,9 @@ def test_11_dynamic_tenant_isolation(client: TestClient, db_session: Session):
     iosys = get_or_create_client_company(db_session, "IOSYS")
     
     agency_a, user_a = get_or_create_agency_and_user(db_session, "Isolation Agency A", "iso_a@agency.com")
-    headers_a = get_vendor_auth_header(client, "iso_a@agency.com")
+    add_membership(db_session, user_a.id, dynamic_tenant.id)
+    headers_iosys = get_vendor_auth_header(client, "iso_a@agency.com", iosys.id)
+    headers_dyn = get_vendor_auth_header(client, "iso_a@agency.com", dynamic_tenant.id)
     
     role_dyn = create_job_role(db_session, dynamic_tenant, "Dyn Role 11", "JOB-ISO-DYN-11")
     role_iosys = create_job_role(db_session, iosys, "IOSYS Role 11", "JOB-ISO-IOSYS-11")
@@ -508,12 +536,12 @@ def test_11_dynamic_tenant_isolation(client: TestClient, db_session: Session):
     # 1. Submit to IOSYS -> ALLOW
     res_iosys = create_eligible_resume(db_session, iosys.id, user_a.id)
     payload_iosys = make_payload(role_iosys, res_iosys.id, pan, "dyn@test.com", "Dyn Cand")
-    headers_a["Idempotency-Key"] = str(uuid.uuid4())
-    assert client.post("/api/v1/submissions", json=payload_iosys, headers=headers_a).status_code == 201
+    headers_iosys["Idempotency-Key"] = str(uuid.uuid4())
+    assert client.post("/api/v1/submissions", json=payload_iosys, headers=headers_iosys).status_code == 201
     
     # 2. Submit to dynamic tenant -> ALLOW (independent timeline)
     res_dyn = create_eligible_resume(db_session, dynamic_tenant.id, user_a.id)
     payload_dyn = make_payload(role_dyn, res_dyn.id, pan, "dyn@test.com", "Dyn Cand")
-    headers_a["Idempotency-Key"] = str(uuid.uuid4())
-    assert client.post("/api/v1/submissions", json=payload_dyn, headers=headers_a).status_code == 201
+    headers_dyn["Idempotency-Key"] = str(uuid.uuid4())
+    assert client.post("/api/v1/submissions", json=payload_dyn, headers=headers_dyn).status_code == 201
 

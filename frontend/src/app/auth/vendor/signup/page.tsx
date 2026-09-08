@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
@@ -10,25 +10,41 @@ import { Button } from "@/components/ui/Button";
 export default function VendorSignup() {
   const router = useRouter();
   const [userName, setUserName] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [email, setEmail] = useState("");
   const [mobile, setMobile] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [companyName, setCompanyName] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const [companiesList, setCompaniesList] = useState<{ id: string; name: string }[]>([]);
+  const [selectedCompanies, setSelectedCompanies] = useState<string[]>([]);
+
+  useEffect(() => {
+    api.get<{ id: string; name: string }[]>("/api/v1/auth/companies?signup=true")
+      .then(data => setCompaniesList(data || []))
+      .catch(err => console.error("Failed to load companies list", err));
+  }, []);
+
+  const handleCompanyToggle = (companyId: string, checked: boolean) => {
+    if (checked) {
+      setSelectedCompanies(prev => [...prev, companyId]);
+    } else {
+      setSelectedCompanies(prev => prev.filter(id => id !== companyId));
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    if (!companyName.trim()) {
-      setError("Vendor Company Name is required.");
+    if (selectedCompanies.length === 0 && !companyName.trim()) {
+      setError("Please select at least one organization / client or enter your vendor company name.");
       return;
     }
 
-    const lowerName = companyName.trim().toLowerCase();
-    if (lowerName === "iosys" || lowerName === "volantis") {
+    if (companyName.trim() && ["iosys", "volantis"].includes(companyName.trim().toLowerCase())) {
       setError("Vendor Company Name cannot be IOSYS or Volantis.");
       return;
     }
@@ -44,7 +60,7 @@ export default function VendorSignup() {
       await api.post(
         "/api/v1/auth/vendor/signup",
         {
-          companies: [],
+          companies: selectedCompanies,
           company_name: companyName.trim(),
           user_name: userName,
           email,
@@ -120,7 +136,32 @@ export default function VendorSignup() {
         )}
 
         <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", marginBottom: "0.25rem" }}>
+            <label style={{ fontSize: "0.875rem", fontWeight: 600, color: "hsl(var(--foreground-hsl))" }}>
+              Select Organizations / Clients You Work With
+            </label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem 1.5rem", marginTop: "0.25rem" }}>
+              {(companiesList || []).map((c) => (
+                <label key={c.id} style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", fontSize: "0.9rem" }}>
+                  <input
+                    type="checkbox"
+                    checked={selectedCompanies.includes(c.id)}
+                    onChange={(e) => handleCompanyToggle(c.id, e.target.checked)}
+                    style={{ width: "16px", height: "16px", cursor: "pointer", accentColor: "hsl(var(--primary-hsl))" }}
+                  />
+                  <span>{c.name}</span>
+                </label>
+              ))}
+            </div>
+          </div>
 
+          <Input
+            label="Vendor Company Name"
+            type="text"
+            placeholder="Your Company LLC"
+            value={companyName}
+            onChange={(e) => setCompanyName(e.target.value)}
+          />
 
           <Input
             label="Full Name"
@@ -128,16 +169,6 @@ export default function VendorSignup() {
             placeholder="John Doe"
             value={userName}
             onChange={(e) => setUserName(e.target.value)}
-            required
-            minLength={2}
-          />
-
-          <Input
-            label="Vendor Company Name"
-            type="text"
-            placeholder="e.g. ABC Technologies"
-            value={companyName}
-            onChange={(e) => setCompanyName(e.target.value)}
             required
             minLength={2}
           />
@@ -152,9 +183,9 @@ export default function VendorSignup() {
           />
 
           <Input
-            label="Mobile Number (Indian)"
+            label="Mobile Number (with country code)"
             type="tel"
-            placeholder="9876543210"
+            placeholder="+91 9988776655"
             value={mobile}
             onChange={(e) => setMobile(e.target.value)}
             required

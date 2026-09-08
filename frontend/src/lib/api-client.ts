@@ -9,13 +9,15 @@ export class APIError extends Error {
   status: number;
   detail: string;
   fieldErrors?: Record<string, string>;
+  data?: any;
 
-  constructor(status: number, detail: string, fieldErrors?: Record<string, string>) {
+  constructor(status: number, detail: string, fieldErrors?: Record<string, string>, data?: any) {
     super(detail || `API error with status ${status}`);
     this.name = "APIError";
     this.status = status;
     this.detail = detail;
     this.fieldErrors = fieldErrors;
+    this.data = data;
   }
 }
 
@@ -275,8 +277,9 @@ class APIClient {
       if (!response.ok) {
         let detail = "";
         let fieldErrors: Record<string, string> | undefined = undefined;
+        let errorData: any = null;
         try {
-          const errorData = await response.json();
+          errorData = await response.json();
           const rawDetail = errorData.detail;
           const parsedDetail = formatDetailError(rawDetail);
           detail = parsedDetail || `Request failed with status ${response.status}`;
@@ -296,7 +299,7 @@ class APIClient {
         } catch {
           detail = `Request failed with status ${response.status}`;
         }
-        throw new APIError(response.status, detail, fieldErrors);
+        throw new APIError(response.status, detail, fieldErrors, errorData);
       }
 
       // Check if response is a binary/blob (XLSX export or PDF resume download)

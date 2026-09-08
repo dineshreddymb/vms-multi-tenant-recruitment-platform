@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api-client";
 import { Button } from "@/components/ui/Button";
 import { Skeleton } from "@/components/ui/Skeleton";
+import { CompanyBadge } from "@/components/CompanyBranding";
 
 interface VendorActiveJobRole {
   id: string;
@@ -177,17 +178,7 @@ export default function VendorActiveJobRolesPage() {
                       </div>
                     </td>
                     <td style={{ padding: "1rem 1.5rem" }}>
-                      <span style={{
-                        padding: "0.25rem 0.6rem",
-                        backgroundColor: "rgba(37, 99, 235, 0.05)",
-                        borderRadius: "4px",
-                        fontSize: "0.85rem",
-                        fontWeight: 600,
-                        color: "hsl(var(--primary-hsl))",
-                        border: "1px solid rgba(37, 99, 235, 0.2)"
-                      }}>
-                        {role.company}
-                      </span>
+                      <CompanyBadge companyName={role.company} />
                     </td>
                     <td style={{ padding: "1rem 1.5rem" }}>
                       <span style={{

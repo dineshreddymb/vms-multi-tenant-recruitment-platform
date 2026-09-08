@@ -132,14 +132,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
   const router = useRouter();
 
-  const resolveVendorUser = (profile: VendorProfileResponse): User => {
+  const resolveVendorUser = (profile: VendorProfileResponse, jwtCompanyId?: string): User => {
     const companies = profile.companies || [];
-    const activeCompanies = companies.filter((c) => c.status === "ACTIVE");
-    const savedActiveId = sessionStorage.getItem("vms_active_vendor_id");
-    const matchingActive = activeCompanies.find((c) => c.vendor_id === savedActiveId);
+    const activeCompanies = companies.filter((c) => c.status === "ACTIVE" || c.status === "APPROVED");
 
-    const activeVendor = matchingActive || activeCompanies[0];
-    const activeVendorId = activeVendor?.vendor_id || profile.active_vendor_id;
+    // Company is ALWAYS locked to the JWT company_id set at login.
+    // We do NOT read vms_active_vendor_id from sessionStorage or let the profile list override it.
+    const activeVendorId = jwtCompanyId || sessionStorage.getItem("vms_active_vendor_id") || profile.active_vendor_id;
+    const activeVendor = activeCompanies.find((c) => c.vendor_id === activeVendorId);
     const activeCompanyName = activeVendor?.company_name || "";
 
     if (activeVendorId) {
@@ -157,18 +157,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   };
 
-  const setActiveVendorId = (vendorId: string) => {
-    setUser((prev) => {
-      if (!prev || prev.role !== "VENDOR_USER") return prev;
-      const target = prev.companies?.find((c) => c.vendor_id === vendorId);
-      if (!target) return prev;
-      sessionStorage.setItem("vms_active_vendor_id", vendorId);
-      return {
-        ...prev,
-        activeVendorId: vendorId,
-        activeCompanyName: target.company_name,
-      };
-    });
+  // No-op: vendor company context is locked at login via JWT and cannot be changed client-side.
+  // A vendor must log out and log in selecting a different company to change context.
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const setActiveVendorId = (_vendorId: string) => {
+    // Intentionally no-op — company is JWT-locked for the entire session.
+    // This function is kept for interface compatibility only.
   };
 
   // Re-usable: restore session from stored token on page reload
@@ -220,8 +214,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     try {
       if (role === "RECRUITER") {
-        const companyId = decoded.company_id;
-        const companyName = decoded.company_name;
+        const companyId = decoded.company_id as string | undefined;
+        const companyName = decoded.company_name as string | undefined;
         const details = await resolveRecruiterDetails(userId, storedEmail);
         setUser({
           id: userId,
@@ -235,8 +229,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           activeCompanyName: companyName,
         });
       } else {
+        const jwtCompanyId = decoded.company_id as string;
+        if (jwtCompanyId && jwtCompanyId !== "None") {
+          sessionStorage.setItem("vms_active_vendor_id", jwtCompanyId);
+        }
         const profile = await api.get<VendorProfileResponse>("/api/v1/vendor/profile");
-        setUser(resolveVendorUser(profile));
+        // Pass jwtCompanyId to lock the active company from the JWT — ignores profile list order
+        setUser(resolveVendorUser(profile, jwtCompanyId !== "None" ? jwtCompanyId : undefined));
       }
     } catch (err) {
       const errorObj = err as { status?: number; detail?: string };
@@ -265,8 +264,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const details = await resolveRecruiterDetails(decoded.sub, user.email);
       setUser((prev) => prev ? { ...prev, ...details } : null);
     } else {
+      const jwtCompanyId = decoded.company_id as string;
       const profile = await api.get<VendorProfileResponse>("/api/v1/vendor/profile");
-      setUser(resolveVendorUser(profile));
+      // Keep company locked from JWT during profile refresh
+      setUser(resolveVendorUser(profile, jwtCompanyId && jwtCompanyId !== "None" ? jwtCompanyId : undefined));
     }
   };
 
@@ -312,9 +313,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         portalType === "vendor"
           ? "/api/v1/auth/vendor/login"
           : "/api/v1/auth/recruiter/login";
-      const requestBody = portalType === "recruiter" 
-        ? { email, password, company_id: companyId }
-        : { email, password };
+      const requestBody = { email, password, company_id: companyId };
 
       const response = await api.post<{ access_token: string; token_type: string }>(
         endpoint,
@@ -352,8 +351,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
         router.push("/recruiter/candidates");
       } else {
+        if (jwtCompanyId && jwtCompanyId !== "None") {
+          sessionStorage.setItem("vms_active_vendor_id", jwtCompanyId);
+        }
         const profile = await api.get<VendorProfileResponse>("/api/v1/vendor/profile");
-        setUser(resolveVendorUser(profile));
+        // Lock active company from the JWT immediately — do not let profile list change it
+        setUser(resolveVendorUser(profile, jwtCompanyId && jwtCompanyId !== "None" ? jwtCompanyId : undefined));
         router.push("/vendor/dashboard");
       }
     } catch (e) {
