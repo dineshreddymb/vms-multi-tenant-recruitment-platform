@@ -43,7 +43,7 @@ def seed_database(db: Session = None):
         iosys_email = (os.getenv("IOSYS_ADMIN_EMAIL") or os.getenv("INITIAL_ADMIN_EMAIL") or "deepti.v@iosyssoftware.com").strip().lower()
         iosys_password = os.getenv("IOSYS_ADMIN_PASSWORD") or os.getenv("INITIAL_ADMIN_PASSWORD") or "deepti.v@2026"
 
-        volantis_email_raw = os.getenv("VOLANTIS_ADMIN_EMAIL")
+        volantis_email_raw = os.getenv("VOLANTIS_ADMIN_EMAIL") or "deepti.v@volantis.com"
         volantis_email = volantis_email_raw.strip().lower() if volantis_email_raw and volantis_email_raw.strip() else None
         volantis_password = os.getenv("VOLANTIS_ADMIN_PASSWORD") or "deepti.v@2026"
 
@@ -112,7 +112,7 @@ def seed_database(db: Session = None):
                 volantis_admin = InternalUser(
                     email=volantis_email,
                     password_hash=ph.hash(volantis_password),
-                    name="Volantis Admin",
+                    name="Deepti V",
                     mobile="+919876543210",
                     role="RECRUITER",
                     access_level="ADMIN",
