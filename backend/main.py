@@ -2314,7 +2314,7 @@ def list_vendor_users(
         for m in existing_memberships:
             company = db.query(Vendor).filter(Vendor.id == m.vendor_id).first()
             if company:
-                if company_id and m.vendor_id == company_id:
+                if company_id and str(m.vendor_id) == str(company_id):
                     user_in_company = True
                 comps.append({
                     "id": m.id,
