@@ -108,7 +108,7 @@ export default function VendorUsersManagement() {
   }, []);
 
   const handleDisableMembership = async (userId: string, vendorId: string, companyName: string) => {
-    if (!confirm(`Are you sure you want to disable ${companyName} access for this user?`)) return;
+    if (!confirm(`Are you sure you want to deactivate ${companyName} access for this user? They will only lose access to ${companyName} and will remain active in any other companies.`)) return;
     try {
       await api.post(`/api/v1/recruiter/vendor-users/${userId}/memberships/${vendorId}/disable`);
       setUsers(users.map((u) => {
@@ -169,7 +169,7 @@ export default function VendorUsersManagement() {
       fontWeight: 700,
       textTransform: "uppercase" as const
     };
-    if (status === "ACTIVE") {
+    if (status === "ACTIVE" || status === "APPROVED") {
       return { ...base, backgroundColor: "rgba(16, 185, 129, 0.1)", color: "hsl(var(--success-hsl))" };
     }
     return { ...base, backgroundColor: "rgba(220, 38, 38, 0.1)", color: "hsl(var(--danger-hsl))" };
@@ -222,7 +222,7 @@ export default function VendorUsersManagement() {
                 <th style={{ padding: "1rem 1.5rem", fontWeight: 600 }}>Login Email</th>
                 <th style={{ padding: "1rem 1.5rem", fontWeight: 600 }}>Mobile Number</th>
                 <th style={{ padding: "1rem 1.5rem", fontWeight: 600 }}>Company Memberships</th>
-                <th style={{ padding: "1rem 1.5rem", fontWeight: 600 }}>Account Status</th>
+                <th style={{ padding: "1rem 1.5rem", fontWeight: 600 }}>Status ({currentUser?.activeCompanyName || "Company"})</th>
                 <th style={{ padding: "1rem 1.5rem", fontWeight: 600, textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
@@ -245,83 +245,74 @@ export default function VendorUsersManagement() {
                   </td>
                 </tr>
               ) : (
-                users.map((u) => (
-                  <tr key={u.id} style={{ borderBottom: "1px solid hsl(var(--card-border-hsl))" }}>
-                    <td style={{ padding: "1rem 1.5rem", fontWeight: 600 }}>{u.name}</td>
-                    <td style={{ padding: "1rem 1.5rem" }}>{u.email}</td>
-                    <td style={{ padding: "1rem 1.5rem" }}>{u.mobile}</td>
-                    <td style={{ padding: "1rem 1.5rem" }}>
-                      <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                        {(u.companies && u.companies.length > 0) ? (
-                          u.companies.map((m) => (
-                            <div key={m.id || m.vendor_id} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                              <span style={{
-                                padding: "0.15rem 0.4rem",
-                                borderRadius: "4px",
-                                backgroundColor: m.company_name.toUpperCase() === "IOSYS" ? "rgba(44, 219, 163, 0.15)" : "rgba(30, 99, 233, 0.1)",
-                                color: m.company_name.toUpperCase() === "IOSYS" ? "#1F4E47" : "#1E63E9",
-                                border: `1px solid ${m.company_name.toUpperCase() === "IOSYS" ? "rgba(31, 78, 71, 0.2)" : "rgba(30, 99, 233, 0.15)"}`,
-                                fontWeight: 700,
-                                fontSize: "0.8rem",
-                                textTransform: m.company_name.toUpperCase() === "IOSYS" ? "uppercase" : "none",
-                              }}>
-                                {m.company_name.toUpperCase() === "IOSYS" ? "IOSYS" : "Volantis"}
-                              </span>
-                              <span style={getStatusBadgeStyle(m.status)}>{m.status}</span>
-                              {(isAdmin || !currentUser?.activeCompanyName || m.company_name.toUpperCase() === currentUser.activeCompanyName.toUpperCase()) && (
-                                (m.status === "ACTIVE" || m.status === "APPROVED") ? (
-                                  <button
-                                    onClick={() => handleDisableMembership(u.id, m.vendor_id, m.company_name)}
-                                    style={{
-                                      fontSize: "0.75rem",
-                                      color: "hsl(var(--danger-hsl))",
-                                      background: "none",
-                                      border: "none",
-                                      cursor: "pointer",
-                                      textDecoration: "underline"
-                                    }}
-                                  >
-                                    Disable
-                                  </button>
-                                ) : (
-                                  <button
-                                    onClick={() => handleReactivateMembership(u.id, m.vendor_id)}
-                                    style={{
-                                      fontSize: "0.75rem",
-                                      color: "hsl(var(--success-hsl))",
-                                      background: "none",
-                                      border: "none",
-                                      cursor: "pointer",
-                                      textDecoration: "underline"
-                                    }}
-                                  >
-                                    Reactivate
-                                  </button>
-                                )
-                              )}
-                            </div>
-                          ))
+                users.map((u) => {
+                  const currentCompany = currentUser?.activeCompanyName || "Current Company";
+                  const activeMembership = u.companies?.find(
+                    (m) => m.company_name?.toUpperCase() === currentCompany.toUpperCase() || m.vendor_id === currentUser?.activeVendorId
+                  ) || u.companies?.[0];
+                  const isCompanyActive = activeMembership
+                    ? (activeMembership.status === "ACTIVE" || activeMembership.status === "APPROVED")
+                    : (u.status === "ACTIVE");
+
+                  return (
+                    <tr key={u.id} style={{ borderBottom: "1px solid hsl(var(--card-border-hsl))" }}>
+                      <td style={{ padding: "1rem 1.5rem", fontWeight: 600 }}>{u.name}</td>
+                      <td style={{ padding: "1rem 1.5rem" }}>{u.email}</td>
+                      <td style={{ padding: "1rem 1.5rem" }}>{u.mobile}</td>
+                      <td style={{ padding: "1rem 1.5rem" }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
+                          {(u.companies && u.companies.length > 0) ? (
+                            u.companies.map((m) => (
+                              <div key={m.id || m.vendor_id} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                                <span style={{
+                                  padding: "0.15rem 0.4rem",
+                                  borderRadius: "4px",
+                                  backgroundColor: m.company_name.toUpperCase() === "IOSYS" ? "rgba(44, 219, 163, 0.15)" : "rgba(30, 99, 233, 0.1)",
+                                  color: m.company_name.toUpperCase() === "IOSYS" ? "#1F4E47" : "#1E63E9",
+                                  border: `1px solid ${m.company_name.toUpperCase() === "IOSYS" ? "rgba(31, 78, 71, 0.2)" : "rgba(30, 99, 233, 0.15)"}`,
+                                  fontWeight: 700,
+                                  fontSize: "0.8rem",
+                                  textTransform: m.company_name.toUpperCase() === "IOSYS" ? "uppercase" : "none",
+                                }}>
+                                  {m.company_name.toUpperCase() === "IOSYS" ? "IOSYS" : "Volantis"}
+                                </span>
+                                <span style={getStatusBadgeStyle(m.status)}>{m.status}</span>
+                              </div>
+                            ))
+                          ) : (
+                            <span style={{ color: "hsl(var(--muted-hsl))", fontSize: "0.8rem" }}>No memberships</span>
+                          )}
+                        </div>
+                      </td>
+                      <td style={{ padding: "1rem 1.5rem" }}>
+                        <span style={getStatusBadgeStyle(isCompanyActive ? "ACTIVE" : "DISABLED")}>
+                          {isCompanyActive ? "ACTIVE" : "DISABLED"}
+                        </span>
+                      </td>
+                      <td style={{ padding: "1rem 1.5rem", textAlign: "right" }}>
+                        {isCompanyActive ? (
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => activeMembership ? handleDisableMembership(u.id, activeMembership.vendor_id, activeMembership.company_name) : handleDisable(u.id)}
+                            style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
+                          >
+                            Deactivate for {activeMembership?.company_name || currentCompany}
+                          </Button>
                         ) : (
-                          <span style={{ color: "hsl(var(--muted-hsl))", fontSize: "0.8rem" }}>No memberships</span>
+                          <Button
+                            variant="primary"
+                            size="sm"
+                            onClick={() => activeMembership ? handleReactivateMembership(u.id, activeMembership.vendor_id) : handleReactivate(u.id)}
+                            style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
+                          >
+                            Activate for {activeMembership?.company_name || currentCompany}
+                          </Button>
                         )}
-                      </div>
-                    </td>
-                    <td style={{ padding: "1rem 1.5rem" }}>
-                      <span style={getStatusBadgeStyle(u.status)}>{u.status}</span>
-                    </td>
-                    <td style={{ padding: "1rem 1.5rem", textAlign: "right" }}>
-                      {u.status === "ACTIVE" ? (
-                        <Button variant="danger" size="sm" onClick={() => handleDisable(u.id)} style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}>
-                          Disable Account
-                        </Button>
-                      ) : (
-                        <Button variant="primary" size="sm" onClick={() => handleReactivate(u.id)} style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}>
-                          Reactivate Account
-                        </Button>
-                      )}
-                    </td>
-                  </tr>
-                ))
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
