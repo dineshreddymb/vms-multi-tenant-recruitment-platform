@@ -59,7 +59,32 @@ class EmailService:
             logger.info(f"Mock sending password reset email to {email}")
             return reset_link
             
-        # In development or production mode, send a real SMTP email
+        # If RESEND_API_KEY is configured, send via Resend HTTPS API (reliable in cloud environments like Railway)
+        resend_api_key = os.getenv("RESEND_API_KEY")
+        if resend_api_key and resend_api_key.strip():
+            try:
+                import httpx
+                resend_from = os.getenv("RESEND_FROM") or "VMS Support <onboarding@resend.dev>"
+                payload = {
+                    "from": resend_from,
+                    "to": [email],
+                    "subject": subject,
+                    "text": body
+                }
+                headers = {
+                    "Authorization": f"Bearer {resend_api_key.strip()}",
+                    "Content-Type": "application/json"
+                }
+                resp = httpx.post("https://api.resend.com/emails", json=payload, headers=headers, timeout=10.0)
+                if resp.status_code in (200, 201):
+                    logger.info("Successfully sent password reset email via Resend HTTPS API.")
+                    return reset_link
+                else:
+                    logger.error("Resend API returned status %s: %s", resp.status_code, resp.text)
+            except Exception as e:
+                logger.error("Failed to send password reset email via Resend: %s", type(e).__name__)
+
+        # In development or production mode, fallback to SMTP email
         # Do NOT print raw token or URL to logs or console
         try:
             msg = MIMEMultipart()
