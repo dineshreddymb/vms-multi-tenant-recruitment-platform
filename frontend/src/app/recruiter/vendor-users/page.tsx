@@ -221,8 +221,7 @@ export default function VendorUsersManagement() {
                 <th style={{ padding: "1rem 1.5rem", fontWeight: 600 }}>Representative Name</th>
                 <th style={{ padding: "1rem 1.5rem", fontWeight: 600 }}>Login Email</th>
                 <th style={{ padding: "1rem 1.5rem", fontWeight: 600 }}>Mobile Number</th>
-                <th style={{ padding: "1rem 1.5rem", fontWeight: 600 }}>Company Memberships</th>
-                <th style={{ padding: "1rem 1.5rem", fontWeight: 600 }}>Status ({currentUser?.activeCompanyName || "Company"})</th>
+                <th style={{ padding: "1rem 1.5rem", fontWeight: 600 }}>Status</th>
                 <th style={{ padding: "1rem 1.5rem", fontWeight: 600, textAlign: "right" }}>Actions</th>
               </tr>
             </thead>
@@ -233,14 +232,13 @@ export default function VendorUsersManagement() {
                     <td style={{ padding: "1rem 1.5rem" }}><Skeleton width="140px" /></td>
                     <td style={{ padding: "1rem 1.5rem" }}><Skeleton width="180px" /></td>
                     <td style={{ padding: "1rem 1.5rem" }}><Skeleton width="100px" /></td>
-                    <td style={{ padding: "1rem 1.5rem" }}><Skeleton width="220px" /></td>
                     <td style={{ padding: "1rem 1.5rem" }}><Skeleton width="60px" /></td>
                     <td style={{ padding: "1rem 1.5rem", textAlign: "right" }}><Skeleton width="80px" /></td>
                   </tr>
                 ))
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} style={{ padding: "3rem", textAlign: "center", color: "hsl(var(--muted-hsl))" }}>
+                  <td colSpan={5} style={{ padding: "3rem", textAlign: "center", color: "hsl(var(--muted-hsl))" }}>
                     No vendor users provisioned in the system.
                   </td>
                 </tr>
@@ -260,31 +258,6 @@ export default function VendorUsersManagement() {
                       <td style={{ padding: "1rem 1.5rem" }}>{u.email}</td>
                       <td style={{ padding: "1rem 1.5rem" }}>{u.mobile}</td>
                       <td style={{ padding: "1rem 1.5rem" }}>
-                        <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-                          {(u.companies && u.companies.length > 0) ? (
-                            u.companies.map((m) => (
-                              <div key={m.id || m.vendor_id} style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                                <span style={{
-                                  padding: "0.15rem 0.4rem",
-                                  borderRadius: "4px",
-                                  backgroundColor: m.company_name.toUpperCase() === "IOSYS" ? "rgba(44, 219, 163, 0.15)" : "rgba(30, 99, 233, 0.1)",
-                                  color: m.company_name.toUpperCase() === "IOSYS" ? "#1F4E47" : "#1E63E9",
-                                  border: `1px solid ${m.company_name.toUpperCase() === "IOSYS" ? "rgba(31, 78, 71, 0.2)" : "rgba(30, 99, 233, 0.15)"}`,
-                                  fontWeight: 700,
-                                  fontSize: "0.8rem",
-                                  textTransform: m.company_name.toUpperCase() === "IOSYS" ? "uppercase" : "none",
-                                }}>
-                                  {m.company_name.toUpperCase() === "IOSYS" ? "IOSYS" : "Volantis"}
-                                </span>
-                                <span style={getStatusBadgeStyle(m.status)}>{m.status}</span>
-                              </div>
-                            ))
-                          ) : (
-                            <span style={{ color: "hsl(var(--muted-hsl))", fontSize: "0.8rem" }}>No memberships</span>
-                          )}
-                        </div>
-                      </td>
-                      <td style={{ padding: "1rem 1.5rem" }}>
                         <span style={getStatusBadgeStyle(isCompanyActive ? "ACTIVE" : "DISABLED")}>
                           {isCompanyActive ? "ACTIVE" : "DISABLED"}
                         </span>
@@ -303,9 +276,9 @@ export default function VendorUsersManagement() {
                                 handleDisable(u.id);
                               }
                             }}
-                            style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
+                            style={{ padding: "0.25rem 0.75rem", fontSize: "0.85rem" }}
                           >
-                            Deactivate for {activeMembership?.company_name || currentCompany}
+                            Deactivate
                           </Button>
                         ) : (
                           <Button
@@ -319,9 +292,9 @@ export default function VendorUsersManagement() {
                                 handleReactivate(u.id);
                               }
                             }}
-                            style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
+                            style={{ padding: "0.25rem 0.75rem", fontSize: "0.85rem" }}
                           >
-                            Activate for {activeMembership?.company_name || currentCompany}
+                            Activate
                           </Button>
                         )}
                       </td>
