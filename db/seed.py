@@ -1,4 +1,5 @@
 import os
+import uuid
 from argon2 import PasswordHasher
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -7,6 +8,9 @@ from db.connection import SessionLocal
 
 ph = PasswordHasher()
 
+def func_lower_email_eq(column, email):
+    return func.lower(column) == email.strip().lower()
+
 def seed_database(db: Session = None):
     should_close = False
     if db is None:
@@ -14,65 +18,137 @@ def seed_database(db: Session = None):
         should_close = True
 
     try:
-        # 1. Seed Initial Admin Recruiter
-        is_production = os.getenv("ENV", "").lower() == "production" or os.getenv("PRODUCTION", "").lower() == "true"
-        admin_email_env = os.getenv("INITIAL_ADMIN_EMAIL")
-        
-        if is_production and not admin_email_env:
-            raise ValueError("INITIAL_ADMIN_EMAIL environment variable must be explicitly configured in production environment.")
-            
-        admin_email = (admin_email_env or "mbdineshreddy@gmail.com").strip()
-        admin_password = os.getenv("INITIAL_ADMIN_PASSWORD")
+        # 1. Ensure Canonical Tenant Companies Exist
+        iosys_vendor = db.query(Vendor).filter(Vendor.normalized_name == "iosys").first()
+        if not iosys_vendor:
+            iosys_vendor = Vendor(
+                name="IOSYS",
+                normalized_name="iosys",
+                is_tenant=True
+            )
+            db.add(iosys_vendor)
+            db.flush()
 
-        existing_admin = db.query(InternalUser).filter(
-            func_lower_email_eq(InternalUser.email, admin_email)
+        volantis_vendor = db.query(Vendor).filter(Vendor.normalized_name == "volantis").first()
+        if not volantis_vendor:
+            volantis_vendor = Vendor(
+                name="Volantis",
+                normalized_name="volantis",
+                is_tenant=True
+            )
+            db.add(volantis_vendor)
+            db.flush()
+
+        # 2. Seed / Update IOSYS Admin
+        iosys_email = (os.getenv("IOSYS_ADMIN_EMAIL") or os.getenv("INITIAL_ADMIN_EMAIL") or "deepti.v@iosyssoftware.com").strip().lower()
+        iosys_password = os.getenv("IOSYS_ADMIN_PASSWORD") or os.getenv("INITIAL_ADMIN_PASSWORD") or "deepti.v@2026"
+
+        volantis_email_raw = os.getenv("VOLANTIS_ADMIN_EMAIL")
+        volantis_email = volantis_email_raw.strip().lower() if volantis_email_raw and volantis_email_raw.strip() else None
+        volantis_password = os.getenv("VOLANTIS_ADMIN_PASSWORD") or "deepti.v@2026"
+
+        # Demote any legacy admin users not matching the configured tenant admins
+        allowed_admin_emails = [e for e in [iosys_email, volantis_email] if e]
+        legacy_admins = db.query(InternalUser).filter(
+            InternalUser.access_level == "ADMIN",
+            ~func.lower(InternalUser.email).in_(allowed_admin_emails)
+        ).all()
+        for la in legacy_admins:
+            la.access_level = "STANDARD"
+        db.flush()
+
+        iosys_admin = db.query(InternalUser).filter(
+            func_lower_email_eq(InternalUser.email, iosys_email)
         ).first()
 
-        if not existing_admin:
-            if not admin_password:
-                raise ValueError("INITIAL_ADMIN_PASSWORD environment variable must be set to seed the database.")
-            
-            hashed_password = ph.hash(admin_password)
-            initial_admin = InternalUser(
-                email=admin_email,
-                password_hash=hashed_password,
-                name="Dinesh MB",
+        if not iosys_admin:
+            iosys_admin = InternalUser(
+                email=iosys_email,
+                password_hash=ph.hash(iosys_password),
+                name="Deepti V",
                 mobile="+919876543210",
                 role="RECRUITER",
                 access_level="ADMIN",
-                status="ACTIVE"
+                status="ACTIVE",
+                recruiter_reference=f"REC-{uuid.uuid4().hex[:6].upper()}"
             )
-            db.add(initial_admin)
-            print(f"Seeded initial Admin Recruiter: {admin_email}")
+            db.add(iosys_admin)
+            db.flush()
+            print(f"Seeded IOSYS Admin: {iosys_email}")
         else:
-            existing_admin.name = "Dinesh MB"
-            existing_admin.role = "RECRUITER"
-            existing_admin.access_level = "ADMIN"
-            existing_admin.status = "ACTIVE"
-            print(f"Initial Admin Recruiter {admin_email} already exists. Ensuring details are correct without modifying password.")
+            iosys_admin.role = "RECRUITER"
+            iosys_admin.access_level = "ADMIN"
+            iosys_admin.status = "ACTIVE"
+            if iosys_password:
+                iosys_admin.password_hash = ph.hash(iosys_password)
+            db.flush()
+            print(f"Updated IOSYS Admin: {iosys_email}")
 
-        # 1b. Seed RecruiterCompanyAccess for Admin — ensures admin can log in with IOSYS/Volantis context
-        db.flush()  # Ensure admin ID is available
-        admin_user = db.query(InternalUser).filter(
-            func_lower_email_eq(InternalUser.email, admin_email)
+        # Map IOSYS Admin strictly to IOSYS (remove non-IOSYS access)
+        db.query(RecruiterCompanyAccess).filter(
+            RecruiterCompanyAccess.recruiter_id == iosys_admin.id,
+            RecruiterCompanyAccess.company_id != iosys_vendor.id
+        ).delete(synchronize_session=False)
+
+        iosys_access = db.query(RecruiterCompanyAccess).filter(
+            RecruiterCompanyAccess.recruiter_id == iosys_admin.id,
+            RecruiterCompanyAccess.company_id == iosys_vendor.id
         ).first()
-        if admin_user:
-            allowed_vendors = db.query(Vendor).filter(
-                Vendor.normalized_name.in_(["iosys", "volantis"])
-            ).all()
-            for vendor in allowed_vendors:
-                existing_access = db.query(RecruiterCompanyAccess).filter(
-                    RecruiterCompanyAccess.recruiter_id == admin_user.id,
-                    RecruiterCompanyAccess.company_id == vendor.id
-                ).first()
-                if not existing_access:
-                    db.add(RecruiterCompanyAccess(
-                        recruiter_id=admin_user.id,
-                        company_id=vendor.id
-                    ))
-                    print(f"Seeded RecruiterCompanyAccess for Admin: {vendor.name}")
+        if not iosys_access:
+            db.add(RecruiterCompanyAccess(
+                recruiter_id=iosys_admin.id,
+                company_id=iosys_vendor.id,
+                status="APPROVED"
+            ))
 
-        # 2. Seed Default Departments
+        # 3. Seed / Update Volantis Admin (if configured via env)
+        if volantis_email:
+
+            volantis_admin = db.query(InternalUser).filter(
+                func_lower_email_eq(InternalUser.email, volantis_email)
+            ).first()
+
+            if not volantis_admin:
+                volantis_admin = InternalUser(
+                    email=volantis_email,
+                    password_hash=ph.hash(volantis_password),
+                    name="Volantis Admin",
+                    mobile="+919876543210",
+                    role="RECRUITER",
+                    access_level="ADMIN",
+                    status="ACTIVE",
+                    recruiter_reference=f"REC-{uuid.uuid4().hex[:6].upper()}"
+                )
+                db.add(volantis_admin)
+                db.flush()
+                print(f"Seeded Volantis Admin: {volantis_email}")
+            else:
+                volantis_admin.role = "RECRUITER"
+                volantis_admin.access_level = "ADMIN"
+                volantis_admin.status = "ACTIVE"
+                if volantis_password:
+                    volantis_admin.password_hash = ph.hash(volantis_password)
+                db.flush()
+                print(f"Updated Volantis Admin: {volantis_email}")
+
+            # Map Volantis Admin strictly to Volantis (remove non-Volantis access)
+            db.query(RecruiterCompanyAccess).filter(
+                RecruiterCompanyAccess.recruiter_id == volantis_admin.id,
+                RecruiterCompanyAccess.company_id != volantis_vendor.id
+            ).delete(synchronize_session=False)
+
+            volantis_access = db.query(RecruiterCompanyAccess).filter(
+                RecruiterCompanyAccess.recruiter_id == volantis_admin.id,
+                RecruiterCompanyAccess.company_id == volantis_vendor.id
+            ).first()
+            if not volantis_access:
+                db.add(RecruiterCompanyAccess(
+                    recruiter_id=volantis_admin.id,
+                    company_id=volantis_vendor.id,
+                    status="APPROVED"
+                ))
+
+        # 4. Seed Default Departments
         departments = [
             {"name": "Engineering", "status": "ACTIVE"},
             {"name": "Product Management", "status": "ACTIVE"},
@@ -90,9 +166,9 @@ def seed_database(db: Session = None):
                     status=dept_data["status"]
                 )
                 db.add(dept)
-                print(f"Seeded department: {dept_data['name']}")
 
         db.commit()
+        print("Database seed completed successfully with isolated tenant admin privileges.")
     except Exception as e:
         db.rollback()
         print(f"Error seeding database: {e}")
@@ -100,10 +176,6 @@ def seed_database(db: Session = None):
     finally:
         if should_close:
             db.close()
-
-def func_lower_email_eq(column, email):
-    # helper for email comparison
-    return func.lower(column) == email.strip().lower()
 
 if __name__ == "__main__":
     seed_database()

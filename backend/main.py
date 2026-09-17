@@ -95,6 +95,7 @@ from db.models import (
     PasswordResetToken
 )
 from db.crypto import normalize_pan, get_pan_fingerprint, encrypt_pan, decrypt_pan
+from db.seed import seed_database
 
 def get_authorized_vendor_for_user(db: Session, vendor_user: VendorUser, requested_vendor_id: Optional[UUID] = None) -> UUID:
     """
@@ -141,6 +142,13 @@ app = FastAPI(
     description="V1 FastAPI Monolith Backend",
     version="1.0.0"
 )
+
+@app.on_event("startup")
+def on_startup():
+    try:
+        seed_database()
+    except Exception as e:
+        print(f"Startup database seeding encountered an error: {e}")
 
 # CORS Policy
 app.add_middleware(
