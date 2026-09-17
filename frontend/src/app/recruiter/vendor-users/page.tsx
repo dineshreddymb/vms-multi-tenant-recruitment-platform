@@ -26,7 +26,7 @@ interface VendorUser {
 }
 
 export default function VendorUsersManagement() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user: currentUser } = useAuth();
   const [users, setUsers] = useState<VendorUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -141,7 +141,7 @@ export default function VendorUsersManagement() {
   };
 
   const handleDisable = async (id: string) => {
-    if (!confirm("Are you sure you want to disable this vendor user? They will be locked out of the portal.")) return;
+    if (!confirm("Are you sure you want to disable this vendor user globally? They will be locked out of all client companies (both IOSYS and Volantis).")) return;
     try {
       await api.post<{ detail: string }>(`/api/v1/recruiter/vendor-users/${id}/disable`);
       setUsers(users.map(u => u.id === id ? { ...u, status: "DISABLED" } : u));
@@ -268,7 +268,7 @@ export default function VendorUsersManagement() {
                                 {m.company_name.toUpperCase() === "IOSYS" ? "IOSYS" : "Volantis"}
                               </span>
                               <span style={getStatusBadgeStyle(m.status)}>{m.status}</span>
-                              {isAdmin && (
+                              {(isAdmin || !currentUser?.activeCompanyName || m.company_name.toUpperCase() === currentUser.activeCompanyName.toUpperCase()) && (
                                 (m.status === "ACTIVE" || m.status === "APPROVED") ? (
                                   <button
                                     onClick={() => handleDisableMembership(u.id, m.vendor_id, m.company_name)}

@@ -546,17 +546,7 @@ class PANCheckResponseSchema(BaseModel):
     message: str = "PAN is unique. Eligible for creation."
     eligible_date: Optional[str] = None
 
-class VendorUserResponseSchema(BaseModel):
-    id: UUID
-    vendor_id: Optional[UUID] = None
-    email: str
-    name: str
-    mobile: str
-    status: str
-    created_at: datetime
 
-    class Config:
-        from_attributes = True
 
 class ForgotPasswordRequestSchema(BaseModel):
     email: EmailStr
