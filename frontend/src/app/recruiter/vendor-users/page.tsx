@@ -294,7 +294,15 @@ export default function VendorUsersManagement() {
                           <Button
                             variant="danger"
                             size="sm"
-                            onClick={() => activeMembership ? handleDisableMembership(u.id, activeMembership.vendor_id, activeMembership.company_name) : handleDisable(u.id)}
+                            onClick={() => {
+                              const vid = activeMembership?.vendor_id || currentUser?.activeVendorId || "";
+                              const cname = activeMembership?.company_name || currentCompany;
+                              if (vid) {
+                                handleDisableMembership(u.id, vid, cname);
+                              } else {
+                                handleDisable(u.id);
+                              }
+                            }}
                             style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
                           >
                             Deactivate for {activeMembership?.company_name || currentCompany}
@@ -303,7 +311,14 @@ export default function VendorUsersManagement() {
                           <Button
                             variant="primary"
                             size="sm"
-                            onClick={() => activeMembership ? handleReactivateMembership(u.id, activeMembership.vendor_id) : handleReactivate(u.id)}
+                            onClick={() => {
+                              const vid = activeMembership?.vendor_id || currentUser?.activeVendorId || "";
+                              if (vid) {
+                                handleReactivateMembership(u.id, vid);
+                              } else {
+                                handleReactivate(u.id);
+                              }
+                            }}
                             style={{ padding: "0.25rem 0.5rem", fontSize: "0.8rem" }}
                           >
                             Activate for {activeMembership?.company_name || currentCompany}
