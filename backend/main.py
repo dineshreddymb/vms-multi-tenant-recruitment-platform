@@ -2283,25 +2283,39 @@ def list_vendor_users(
     recruiter = recruiter_context["user"]
     company_id = recruiter_context["company_id"]
 
-    if company_id:
-        users = db.query(VendorUser).join(
-            VendorUserMembership, VendorUserMembership.vendor_user_id == VendorUser.id
-        ).filter(
-            VendorUserMembership.vendor_id == company_id
-        ).order_by(desc(VendorUser.created_at)).all()
-    else:
-        users = db.query(VendorUser).order_by(desc(VendorUser.created_at)).all()
+    tenant_companies = db.query(Vendor).filter(Vendor.is_tenant == True).all()
+
+    # Fetch all vendor users
+    users = db.query(VendorUser).order_by(desc(VendorUser.created_at)).all()
 
     response = []
     for u in users:
-        # Get all memberships for this user
-        memberships = db.query(VendorUserMembership).filter(
+        # Check existing memberships
+        existing_memberships = db.query(VendorUserMembership).filter(
             VendorUserMembership.vendor_user_id == u.id
         ).all()
+
+        # If user has no explicit memberships yet, seed them for all tenant companies
+        if not existing_memberships:
+            created_memberships = []
+            for tc in tenant_companies:
+                m = VendorUserMembership(
+                    vendor_user_id=u.id,
+                    vendor_id=tc.id,
+                    status=u.status if u.status in ["ACTIVE", "DISABLED"] else "ACTIVE"
+                )
+                db.add(m)
+                created_memberships.append(m)
+            db.commit()
+            existing_memberships = created_memberships
+
         comps = []
-        for m in memberships:
+        user_in_company = False
+        for m in existing_memberships:
             company = db.query(Vendor).filter(Vendor.id == m.vendor_id).first()
             if company:
+                if company_id and m.vendor_id == company_id:
+                    user_in_company = True
                 comps.append({
                     "id": m.id,
                     "vendor_id": m.vendor_id,
@@ -2310,16 +2324,8 @@ def list_vendor_users(
                     "created_at": m.created_at
                 })
 
-        if not comps and u.vendor_id:
-            legacy_vendor = db.query(Vendor).filter(Vendor.id == u.vendor_id).first()
-            if legacy_vendor:
-                comps.append({
-                    "id": u.id,
-                    "vendor_id": legacy_vendor.id,
-                    "company_name": legacy_vendor.name,
-                    "status": u.status,
-                    "created_at": u.created_at
-                })
+        if company_id and not user_in_company and getattr(recruiter, "access_level", None) != "ADMIN":
+            continue
 
         response.append({
             "id": u.id,
@@ -2386,10 +2392,10 @@ def disable_vendor_user(
         event_type="VENDOR_USER_DISABLED",
         entity_type="VENDOR_USER",
         entity_id=user.id,
-        payload={"email": user.email, "sessions_revoked": len(active_sessions), "company_id": str(company_id)}
+        payload={"email": user.email, "company_id": str(company_id)}
     )
     db.commit()
-    return {"detail": f"Vendor User {user.name} disabled. Revoked {len(active_sessions)} active sessions."}
+    return {"detail": f"Vendor User {user.name} disabled."}
 
 
 @app.post("/api/v1/recruiter/vendor-users/{id}/reactivate")
@@ -2462,9 +2468,14 @@ def disable_vendor_user_membership(
         VendorUserMembership.vendor_id == vendor_id
     ).first()
     if not membership:
-        raise HTTPException(status_code=404, detail="Vendor user membership not found.")
-
-    membership.status = "DISABLED"
+        membership = VendorUserMembership(
+            vendor_user_id=user_id,
+            vendor_id=vendor_id,
+            status="DISABLED"
+        )
+        db.add(membership)
+    else:
+        membership.status = "DISABLED"
     db.commit()
     return {"detail": "Company membership disabled."}
 
@@ -2488,9 +2499,14 @@ def reactivate_vendor_user_membership(
         VendorUserMembership.vendor_id == vendor_id
     ).first()
     if not membership:
-        raise HTTPException(status_code=404, detail="Vendor user membership not found.")
-
-    membership.status = "APPROVED"
+        membership = VendorUserMembership(
+            vendor_user_id=user_id,
+            vendor_id=vendor_id,
+            status="ACTIVE"
+        )
+        db.add(membership)
+    else:
+        membership.status = "ACTIVE"
     db.commit()
     return {"detail": "Company membership reactivated."}
 
