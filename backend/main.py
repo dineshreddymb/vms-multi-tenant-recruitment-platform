@@ -2283,26 +2283,43 @@ def list_vendor_users(
     recruiter = recruiter_context["user"]
     company_id = recruiter_context["company_id"]
 
-    users = db.query(VendorUser).join(
-        VendorUserMembership, VendorUserMembership.vendor_user_id == VendorUser.id
-    ).filter(
-        VendorUserMembership.vendor_id == company_id,
-        VendorUserMembership.status.in_(["APPROVED", "ACTIVE"])
-    ).order_by(desc(VendorUser.created_at)).all()
+    if company_id:
+        users = db.query(VendorUser).join(
+            VendorUserMembership, VendorUserMembership.vendor_user_id == VendorUser.id
+        ).filter(
+            VendorUserMembership.vendor_id == company_id
+        ).order_by(desc(VendorUser.created_at)).all()
+    else:
+        users = db.query(VendorUser).order_by(desc(VendorUser.created_at)).all()
 
     response = []
     for u in users:
         # Get all memberships for this user
-        memberships = db.query(VendorUserMembership).join(Vendor).filter(
+        memberships = db.query(VendorUserMembership).filter(
             VendorUserMembership.vendor_user_id == u.id
         ).all()
-        comps = [{
-            "id": m.id,
-            "vendor_id": m.vendor_id,
-            "company_name": m.vendor.name,
-            "status": m.status,
-            "created_at": m.created_at
-        } for m in memberships]
+        comps = []
+        for m in memberships:
+            company = db.query(Vendor).filter(Vendor.id == m.vendor_id).first()
+            if company:
+                comps.append({
+                    "id": m.id,
+                    "vendor_id": m.vendor_id,
+                    "company_name": company.name,
+                    "status": m.status,
+                    "created_at": m.created_at
+                })
+
+        if not comps and u.vendor_id:
+            legacy_vendor = db.query(Vendor).filter(Vendor.id == u.vendor_id).first()
+            if legacy_vendor:
+                comps.append({
+                    "id": u.id,
+                    "vendor_id": legacy_vendor.id,
+                    "company_name": legacy_vendor.name,
+                    "status": u.status,
+                    "created_at": u.created_at
+                })
 
         response.append({
             "id": u.id,
